@@ -328,7 +328,7 @@ impl<'a> From<&'a [u8]> for FieldValue<'a> {
 pub struct ClassBuilder<'a> {
     name: &'a str,
     signature: Option<&'a str>,
-    serial_version_uid: i64,
+    serial_version_uid: Option<i64>,
     flags: ClassFlags,
     fields: Vec<Field>,
     super_class: Option<Class>,
@@ -484,7 +484,7 @@ impl Class {
         ClassBuilder {
             name: class,
             signature: None,
-            serial_version_uid: 1,
+            serial_version_uid: None,
             flags: ClassFlags::SERIALIZABLE,
             fields: vec![],
             super_class: None,
@@ -499,7 +499,7 @@ impl<'a> ClassBuilder<'a> {
     }
 
     pub fn serial_version_uid(mut self, serial_version_uid: i64) -> ClassBuilder<'a> {
-        self.serial_version_uid = serial_version_uid;
+        self.serial_version_uid.replace(serial_version_uid);
         self
     }
 
@@ -534,7 +534,7 @@ impl<'a> ClassBuilder<'a> {
                 Some(s) => AtomString::from(s),
                 None => to_signature(name),
             },
-            serial_version_uid,
+            serial_version_uid: serial_version_uid.unwrap_or(1),
             flags,
             fields,
             super_class,

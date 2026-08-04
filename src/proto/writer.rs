@@ -1,12 +1,12 @@
 use super::{Class, FieldKind, FieldValue};
 use crate::astr::AtomString;
+use crate::misc::to_modified_utf8;
 use byteorder::{BigEndian, WriteBytesExt};
 use hashbrown::HashMap;
-use std::io::{self};
-// java_ser/constants.rs
+use std::io;
 
 // Stream 头
-const STREAM_MAGIC: u16 = 0xACED;
+const STREAM_MAGIC: u16 = 0xaced;
 const STREAM_VERSION: u16 = 0x0005;
 
 // TC_* type code
@@ -20,42 +20,15 @@ const TC_CLASS: u8 = 0x76;
 const TC_BLOCKDATA: u8 = 0x77;
 const TC_ENDBLOCKDATA: u8 = 0x78;
 const TC_RESET: u8 = 0x79;
-const TC_BLOCKDATALONG: u8 = 0x7A;
-const TC_EXCEPTION: u8 = 0x7B;
-const TC_LONGSTRING: u8 = 0x7C;
-const TC_PROXYCLASSDESC: u8 = 0x7D;
-const TC_ENUM: u8 = 0x7E;
-const TC_MAX: u8 = 0x7E;
+const TC_BLOCKDATALONG: u8 = 0x7a;
+const TC_EXCEPTION: u8 = 0x7b;
+const TC_LONGSTRING: u8 = 0x7c;
+const TC_PROXYCLASSDESC: u8 = 0x7d;
+const TC_ENUM: u8 = 0x7e;
+const TC_MAX: u8 = 0x7e;
 const TC_NULLREF: u8 = 0x70; // 别名
 
-const BASE_WIRE_HANDLE: u32 = 0x7E0000;
-
-/// 编码为 Java modified-UTF-8，返回 (字节数据, utf16_code_unit_count)
-pub fn to_modified_utf8(s: &str) -> (Vec<u8>, u16) {
-    let mut out = Vec::with_capacity(s.len());
-    let mut count: u16 = 0;
-
-    for ch in s.chars() {
-        let mut buf = [0u16; 2];
-        let units = ch.encode_utf16(&mut buf);
-        for &unit in units.iter() {
-            count += 1;
-            match unit {
-                0x0001..=0x007F => out.push(unit as u8),
-                0 | 0x0080..=0x07FF => {
-                    out.push(0xC0 | ((unit >> 6) as u8 & 0x1F));
-                    out.push(0x80 | (unit as u8 & 0x3F));
-                }
-                _ => {
-                    out.push(0xE0 | ((unit >> 12) as u8 & 0x0F));
-                    out.push(0x80 | ((unit >> 6) as u8 & 0x3F));
-                    out.push(0x80 | (unit as u8 & 0x3F));
-                }
-            }
-        }
-    }
-    (out, count)
-}
+const BASE_WIRE_HANDLE: u32 = 0x7e0000;
 
 pub struct JavaWriter<W: io::Write> {
     w: W,
@@ -115,6 +88,7 @@ impl<W: io::Write> JavaWriter<W> {
         self.w.write_f64::<BigEndian>(v)
     }
 
+    #[inline]
     fn put_all(&mut self, v: &[u8]) -> io::Result<()> {
         self.w.write_all(v)
     }
@@ -198,7 +172,7 @@ impl<W: io::Write> JavaWriter<W> {
     pub fn write_string(&mut self, s: &str) -> io::Result<u32> {
         if let Some(&h) = self.string_handles.get(s) {
             self.write_reference(h)?;
-            info!("write reference#{}: {}", h - BASE_WIRE_HANDLE, s);
+            debug!("write reference#{}: {}", h - BASE_WIRE_HANDLE, s);
             return Ok(h);
         }
         let (bytes, _chars) = to_modified_utf8(s);
@@ -289,10 +263,10 @@ impl<W: io::Write> JavaWriter<W> {
         let name = cd.cached_name();
         if let Some(&h) = self.class_handles.get(&name) {
             self.write_reference(h)?;
-            info!("write class reference#{}: {}", h, name.as_ref());
+            debug!("write class reference#{}: {}", h, name.as_ref());
             return Ok(h);
         }
-        info!("write class full: {}", name.as_ref());
+        debug!("write class full: {}", name.as_ref());
         self.write_class_full(cd)
     }
 

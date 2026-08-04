@@ -2,6 +2,16 @@
 name = "serde-java"
 version = "0.0.1"
 edition = "2024"
+license = "Apache-2.0"
+readme = "README.md"
+authors = ["Jeffsky Tsai <jjeffcaii@outlook.com>"]
+repository = "https://github.com/jjeffcaii/serde-java"
+homepage = "https://github.com/jjeffcaii/serde-java"
+description = "A Rust implementation of the Java Serialization."
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+]
 
 [build-dependencies]
 string_cache_codegen = "0.7"
@@ -13,13 +23,11 @@ anyhow = "1.0"
 once_cell = "1"
 hashbrown = "0.17"
 byteorder = "1.5"
-serde = { version = "1.0", features = ["derive"] }
 string_cache = "0.10"
 bitflags = "2.13"
-bytes = "1.12"
 smallvec = { version = "1.15", features = ["write"] }
+sha1 = "0.11"
 
 [dev-dependencies]
 pretty_env_logger = "0.5"
-assert_matches = "1.5"
 hex = "0.4"

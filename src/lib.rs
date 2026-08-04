@@ -14,6 +14,7 @@ mod error;
 pub mod ext;
 mod misc;
 mod proto;
+mod suid;
 
 pub use error::Error;
 pub use proto::*;
