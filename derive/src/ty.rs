@@ -11,6 +11,8 @@ pub enum JavaTy {
     Str,
     /// Anything else — assumed to implement `JavaObject`.
     Object(Type),
+    /// `Option<T>` where `T` is not a primitive.
+    Nullable(Box<JavaTy>),
 }
 
 impl JavaTy {
@@ -21,7 +23,10 @@ impl JavaTy {
     /// Element type when this is an object array, peeling `Option`. Always `None`
     /// until Task 5 adds the array variants.
     pub fn obj_array_elem(&self) -> Option<&Type> {
-        None
+        match self {
+            JavaTy::Nullable(inner) => inner.obj_array_elem(),
+            _ => None,
+        }
     }
 
     /// The `FieldBuilder` call chained onto `Field::builder(name)`.
@@ -35,6 +40,7 @@ impl JavaTy {
             JavaTy::Object(t) => quote!(
                 .object(<#t as ::serde_java::JavaObject>::class().signature())
             ),
+            JavaTy::Nullable(inner) => inner.field_method(),
         }
     }
 
@@ -42,7 +48,6 @@ impl JavaTy {
     /// as `self.x`. `array_class` names the cached array-class static, used only by
     /// the object-array variant added in Task 5.
     pub fn value_expr(&self, access: &TokenStream, array_class: Option<&Ident>) -> TokenStream {
-        let _ = array_class;
         match self {
             JavaTy::Prim(_, variant, cast) => {
                 let v = Ident::new(variant, Span::call_site());
@@ -59,6 +64,13 @@ impl JavaTy {
                 <#t as ::serde_java::JavaObject>::class(),
                 &#access
             )),
+            JavaTy::Nullable(inner) => {
+                let inner_value = inner.value_expr(&quote!((*__v)), array_class);
+                quote!(match &#access {
+                    ::std::option::Option::Some(__v) => #inner_value,
+                    ::std::option::Option::None => ::serde_java::FieldValue::Null,
+                })
+            }
         }
     }
 }
@@ -103,11 +115,21 @@ fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
             ))
         }
         "Option" => {
-            let _inner = single_generic_arg(orig, seg)?;
-            Err(syn::Error::new(
-                orig.span(),
-                "`Option` fields are not supported yet",
-            ))
+            let inner_ty = single_generic_arg(orig, seg)?;
+            let inner = resolve(inner_ty)?;
+            if inner.is_primitive() {
+                return Err(syn::Error::new(
+                    orig.span(),
+                    "Java primitives cannot be null; drop the `Option`, or use an object type",
+                ));
+            }
+            if matches!(inner, JavaTy::Nullable(_)) {
+                return Err(syn::Error::new(
+                    orig.span(),
+                    "nested `Option` has no Java equivalent",
+                ));
+            }
+            Ok(JavaTy::Nullable(Box::new(inner)))
         }
         // A generic path such as `HashMap<K, V>` is treated as an opaque JavaObject.
         _ => Ok(JavaTy::Object(orig.clone())),

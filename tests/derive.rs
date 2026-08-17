@@ -197,3 +197,54 @@ fn test_derive_signature_override() {
     // 顺序：都是对象组，按 Java 名排 -> lookup, raw
     assert_eq!(vec!["Ljava/util/Map;", "[Ljava/lang/Object;"], sigs);
 }
+
+// ---- Option ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Nullable", serial_version_uid = 6)]
+struct Nullable {
+    id: i32,
+    note: Option<String>,
+    home: Option<Address>,
+}
+
+#[test]
+fn test_derive_option_schema_matches_inner() {
+    let sigs: Vec<String> = Nullable::class()
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
+    // id 是基本类型排最前；home / note 按 Java 名排序
+    assert_eq!(
+        vec!["I", "Lcom/example/Address;", "Ljava/lang/String;"],
+        sigs
+    );
+}
+
+#[test]
+fn test_derive_option_none_writes_null() {
+    let n = Nullable {
+        id: 1,
+        note: None,
+        home: None,
+    };
+    let hex = hex::encode(n.to_bytes().unwrap());
+    // 字段值区在 classdesc 之后：int 0x00000001，然后两个 TC_NULL (0x70)
+    assert!(hex.ends_with("000000017070"), "unexpected tail: {hex}");
+}
+
+#[test]
+fn test_derive_option_some_writes_value() {
+    let n = Nullable {
+        id: 1,
+        note: Some("hi".to_string()),
+        home: Some(Address {
+            city: "NY".to_string(),
+        }),
+    };
+    let hex = hex::encode(n.to_bytes().unwrap());
+    // "hi" -> TC_STRING(0x74) + len 0x0002 + bytes 6869
+    assert!(hex.contains("7400026869"), "missing note: {hex}");
+    assert!(!hex.ends_with("7070"), "should not be null: {hex}");
+}
