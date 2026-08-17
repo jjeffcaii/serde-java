@@ -1,3 +1,5 @@
+#![cfg(feature = "derive")]
+
 use serde_java::*;
 
 // ---- 复用 src/proto/mod.rs 测试里那条来自真实 ObjectOutputStream 的 fixture ----
@@ -113,4 +115,85 @@ fn test_derive_all_scalar_types() {
     };
     // 只验证能跑通、不 panic
     assert!(!s.to_bytes().unwrap().is_empty());
+}
+
+// ---- rename ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Renamed", serial_version_uid = 3)]
+struct Renamed {
+    // 改名后应排到 "beta" 之前（对象组按 Java 名排序，不是 Rust 名）
+    #[java(rename = "aaa")]
+    zzz: Address,
+    beta: Address,
+}
+
+#[test]
+fn test_derive_rename() {
+    let class = Renamed::class();
+    let names: Vec<&str> = class.fields().iter().map(Field::name).collect();
+    assert_eq!(vec!["aaa", "beta"], names);
+}
+
+#[test]
+fn test_derive_rename_affects_wire_field_name() {
+    let r = Renamed {
+        zzz: Address { city: "NY".to_string() },
+        beta: Address { city: "LA".to_string() },
+    };
+    let hex = hex::encode(r.to_bytes().unwrap());
+    // "aaa" 的 modified-UTF-8 是 616161，长度前缀 0003
+    assert!(hex.contains("0003616161"), "missing renamed field: {hex}");
+    // Rust 侧字段名不应出现在流里
+    assert!(!hex.contains("7a7a7a"), "rust field name leaked: {hex}");
+}
+
+// ---- skip ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Skipped", serial_version_uid = 4)]
+struct Skipped {
+    kept: i32,
+    #[java(skip)]
+    ignored: std::collections::HashMap<String, String>,
+    #[java(skip)]
+    also_ignored: f64,
+}
+
+#[test]
+fn test_derive_skip() {
+    let class = Skipped::class();
+    let names: Vec<&str> = class.fields().iter().map(Field::name).collect();
+    assert_eq!(vec!["kept"], names);
+
+    let s = Skipped {
+        kept: 9,
+        ignored: Default::default(),
+        also_ignored: 1.5,
+    };
+    // fields() 也只产出一个值，与 class() 对齐
+    assert_eq!(1, s.fields().len());
+}
+
+// ---- signature ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Declared", serial_version_uid = 5)]
+struct Declared {
+    // Java 侧声明为接口类型，实际写入的对象仍是 com.example.Address
+    #[java(signature = "Ljava/util/Map;")]
+    lookup: Address,
+    #[java(signature = "[Ljava/lang/Object;")]
+    raw: Address,
+}
+
+#[test]
+fn test_derive_signature_override() {
+    // 只检查 schema 侧。故意不序列化 Declared：`raw` 的描述符声明成
+    // [Ljava/lang/Object; 而值侧仍写一个 com.example.Address 对象，这样的流
+    // JVM 是会拒的 —— 本测试要验的只是 signature 有没有原样落进描述符。
+    let class = Declared::class();
+    let sigs: Vec<String> = class.fields().iter().map(|f| f.kind().to_string()).collect();
+    // 顺序：都是对象组，按 Java 名排 -> lookup, raw
+    assert_eq!(vec!["Ljava/util/Map;", "[Ljava/lang/Object;"], sigs);
 }

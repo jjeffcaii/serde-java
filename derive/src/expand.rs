@@ -152,7 +152,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
 
             impl #impl_generics ::serde_java::JavaObject for #ident #ty_generics #where_clause {
                 fn class() -> ::serde_java::Class {
-                    Clone::clone(&CLASS)
+                    ::core::clone::Clone::clone(&CLASS)
                 }
             }
 
