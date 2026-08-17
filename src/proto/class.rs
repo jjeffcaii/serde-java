@@ -3,6 +3,7 @@ use crate::astr::AtomString;
 use crate::misc::to_signature;
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -18,6 +19,7 @@ bitflags! {
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub struct FieldName(AtomString);
 
 impl<A> From<A> for FieldName
@@ -80,6 +82,11 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
+    #[inline]
+    pub fn is_primitive(&self) -> bool {
+        matches!(self, FieldKind::Primitive(_))
+    }
+
     pub fn of_string() -> Self {
         static KIND: Lazy<FieldKind> =
             Lazy::new(|| FieldKind::Object(to_signature("java.lang.String")));
@@ -97,6 +104,7 @@ impl fmt::Display for FieldKind {
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub struct Field(FieldName, FieldKind);
 
 impl Field {
@@ -106,6 +114,24 @@ impl Field {
 
     pub fn kind(&self) -> &FieldKind {
         &self.1
+    }
+}
+
+/// Mirrors `java.io.ObjectStreamField#compareTo`: primitive fields come before
+/// object/array fields, then alphabetically by name.
+impl Ord for Field {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.1.is_primitive(), other.1.is_primitive()) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => self.name().cmp(other.name()),
+        }
+    }
+}
+
+impl PartialOrd for Field {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -328,7 +354,7 @@ impl<'a> From<&'a [u8]> for FieldValue<'a> {
 pub struct ClassBuilder<'a> {
     name: &'a str,
     signature: Option<&'a str>,
-    serial_version_uid: Option<i64>,
+    serial_version_uid: i64,
     flags: ClassFlags,
     fields: Vec<Field>,
     super_class: Option<Class>,
@@ -352,17 +378,15 @@ impl Class {
     pub fn class_of_array(item_class: Class, serial_version_uid: i64) -> Class {
         let array_class_name = format!("[L{};", item_class.name());
         let array_class_sig = format!("[{}", item_class.signature());
-        Class::builder(&array_class_name)
+        Class::builder(&array_class_name, serial_version_uid)
             .signature(&array_class_sig)
-            .serial_version_uid(serial_version_uid)
             .build()
     }
 
     pub fn class_of_boolean_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[Z")
+            Class::builder("[Z", 6309297032502205922)
                 .signature("[Z")
-                .serial_version_uid(6309297032502205922)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -370,9 +394,8 @@ impl Class {
 
     pub fn class_of_char_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[C")
+            Class::builder("[C", -5753798564021173076)
                 .signature("[C")
-                .serial_version_uid(-5753798564021173076)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -380,9 +403,8 @@ impl Class {
 
     pub fn class_of_byte_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[B")
+            Class::builder("[B", -5984413125824719648)
                 .signature("[B")
-                .serial_version_uid(-5984413125824719648)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -390,9 +412,8 @@ impl Class {
 
     pub fn class_of_short_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[S")
+            Class::builder("[S", -1188055269542874886)
                 .signature("[S")
-                .serial_version_uid(-1188055269542874886)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -400,9 +421,8 @@ impl Class {
 
     pub fn class_of_int_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[I")
+            Class::builder("[I", 5600894804908749477)
                 .signature("[I")
-                .serial_version_uid(5600894804908749477)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -410,9 +430,8 @@ impl Class {
 
     pub fn class_of_long_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[J")
+            Class::builder("[J", 8655923659555304851)
                 .signature("[J")
-                .serial_version_uid(8655923659555304851)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -420,9 +439,8 @@ impl Class {
 
     pub fn class_of_float_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[F")
+            Class::builder("[F", 836686056779680834)
                 .signature("[F")
-                .serial_version_uid(836686056779680834)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -430,9 +448,8 @@ impl Class {
 
     pub fn class_of_double_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[D")
+            Class::builder("[D", 4514449696888150558)
                 .signature("[D")
-                .serial_version_uid(4514449696888150558)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -440,9 +457,8 @@ impl Class {
 
     pub fn class_of_string_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[Ljava/lang/String;")
+            Class::builder("[Ljava/lang/String;", -5921575005990323385)
                 .signature("[Ljava/lang/String;")
-                .serial_version_uid(-5921575005990323385)
                 .build()
         });
         Clone::clone(&CLASS)
@@ -480,11 +496,11 @@ impl Class {
         self.raw.super_class.as_ref()
     }
 
-    pub fn builder(class: &str) -> ClassBuilder<'_> {
+    pub fn builder(class: &str, serial_version_uid: i64) -> ClassBuilder<'_> {
         ClassBuilder {
             name: class,
             signature: None,
-            serial_version_uid: None,
+            serial_version_uid,
             flags: ClassFlags::SERIALIZABLE,
             fields: vec![],
             super_class: None,
@@ -495,11 +511,6 @@ impl Class {
 impl<'a> ClassBuilder<'a> {
     pub fn signature(mut self, signature: &'a str) -> Self {
         self.signature = Some(signature);
-        self
-    }
-
-    pub fn serial_version_uid(mut self, serial_version_uid: i64) -> ClassBuilder<'a> {
-        self.serial_version_uid.replace(serial_version_uid);
         self
     }
 
@@ -534,7 +545,7 @@ impl<'a> ClassBuilder<'a> {
                 Some(s) => AtomString::from(s),
                 None => to_signature(name),
             },
-            serial_version_uid: serial_version_uid.unwrap_or(1),
+            serial_version_uid,
             flags,
             fields,
             super_class,
@@ -575,5 +586,27 @@ mod tests {
         info!("{}", f);
         assert_eq!("f", f.name());
         assert_eq!("[Ljava/lang/String;", &f.kind().to_string());
+    }
+
+    #[test]
+    fn test_field_sort() {
+        init();
+
+        // declaration order of examples/example.java
+        let mut fields = vec![
+            Field::builder("id").long(),
+            Field::builder("name").string(),
+            Field::builder("age").int(),
+            Field::builder("addresses").array("Lcom/example/Address;"),
+            Field::builder("ext1").object("java.util.Map"),
+            Field::builder("ext2").object("java.util.Map"),
+        ];
+        fields.sort();
+
+        let actual: Vec<&str> = fields.iter().map(Field::name).collect();
+        assert_eq!(
+            vec!["age", "id", "addresses", "ext1", "ext2", "name"],
+            actual
+        );
     }
 }

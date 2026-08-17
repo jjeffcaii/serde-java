@@ -90,8 +90,7 @@ mod tests {
     impl JavaObject for Demo {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.Demo")
-                    .serial_version_uid(5151422842377556126)
+                Class::builder("com.example.Demo", 5151422842377556126)
                     .field(Field::builder("i").int())
                     .field(Field::builder("message").string())
                     .build()
@@ -114,7 +113,7 @@ mod tests {
     impl JavaObject for Address {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.Address")
+                Class::builder("com.example.Address", -4433675896693646393)
                     .field(Field::builder("city").string())
                     .build()
             });
@@ -137,7 +136,7 @@ mod tests {
     impl JavaObject for Order {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.Order")
+                Class::builder("com.example.Order", 2772851369020234932)
                     .field(Field::builder("id").int())
                     .field(Field::builder("address").object("Lcom/example/Address;"))
                     .build()
@@ -220,7 +219,7 @@ mod tests {
         info!("java serialize nested: {}", hex::encode(&b));
 
         assert_eq!(
-            "aced000573720011636f6d2e6578616d706c652e4f72646572000000000000000102000249000269644c0007616464726573737400154c636f6d2f6578616d706c652f416464726573733b78700000000773720013636f6d2e6578616d706c652e4164647265737300000000000000010200014c0004636974797400124c6a6176612f6c616e672f537472696e673b78707400024e59",
+            "aced000573720011636f6d2e6578616d706c652e4f72646572267b25a101681cb402000249000269644c0007616464726573737400154c636f6d2f6578616d706c652f416464726573733b78700000000773720013636f6d2e6578616d706c652e41646472657373c2786b43385d1bc70200014c0004636974797400124c6a6176612f6c616e672f537472696e673b78707400024e59",
             hex::encode(&b)
         );
 

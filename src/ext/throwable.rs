@@ -4,8 +4,7 @@ use once_cell::sync::Lazy;
 use std::sync::Arc;
 
 static CLASS_OF_STACK_TRACE_ELEMENT: Lazy<Class> = Lazy::new(|| {
-    Class::builder("java.lang.StackTraceElement")
-        .serial_version_uid(6992337162326171013)
+    Class::builder("java.lang.StackTraceElement", 6992337162326171013)
         .field(Field::builder("format").byte())
         .field(Field::builder("lineNumber").int())
         .field(Field::builder("classLoaderName").string())
@@ -18,8 +17,7 @@ static CLASS_OF_STACK_TRACE_ELEMENT: Lazy<Class> = Lazy::new(|| {
 });
 
 static CLASS_OF_THROWABLE: Lazy<Class> = Lazy::new(|| {
-    Class::builder("java.lang.Throwable")
-        .serial_version_uid(-3042686055658047285)
+    Class::builder("java.lang.Throwable", -3042686055658047285)
         .field(Field::builder("detailMessage").string())
         .field(Field::builder("cause").object(to_signature("java.lang.Throwable")))
         .build()

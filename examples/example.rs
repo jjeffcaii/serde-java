@@ -45,8 +45,7 @@ impl ExtInfo {
 impl JavaObject for ExtInfo {
     fn class() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("com.example.ExtInfo")
-                .serial_version_uid(8520976260072537200)
+            Class::builder("com.example.ExtInfo", 8520976260072537200)
                 .field(Field::builder("id").int())
                 .field(Field::builder("key").string())
                 .field(Field::builder("value").string())
@@ -84,8 +83,7 @@ impl Address {
 impl JavaObject for Address {
     fn class() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("com.example.Address")
-                .serial_version_uid(-4433675896693646393)
+            Class::builder("com.example.Address", -4433675896693646393)
                 .field(Field::builder("city").string())
                 .field(Field::builder("country").string())
                 .field(Field::builder("street").string())
@@ -108,8 +106,7 @@ impl JavaSerializable for Address {
 impl JavaObject for User {
     fn class() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("com.example.User")
-                .serial_version_uid(4956385333250593913)
+            Class::builder("com.example.User", 4956385333250593913)
                 .field(Field::builder("age").int())
                 .field(Field::builder("id").long())
                 .field(Field::builder("addresses").array(Address::class().signature()))
