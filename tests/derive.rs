@@ -248,3 +248,154 @@ fn test_derive_option_some_writes_value() {
     assert!(hex.contains("7400026869"), "missing note: {hex}");
     assert!(!hex.ends_with("7070"), "should not be null: {hex}");
 }
+
+// ---- 基本类型数组 ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Arrays", serial_version_uid = 7)]
+struct Arrays {
+    bytes: Vec<u8>,
+    shorts: Vec<i16>,
+    ints: Vec<i32>,
+    longs: Vec<i64>,
+    floats: Vec<f32>,
+    doubles: Vec<f64>,
+}
+
+#[test]
+fn test_derive_primitive_arrays() {
+    let sigs: Vec<String> = Arrays::class()
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
+    // 全是对象组（数组不是 primitive），按 Java 名排序：
+    // bytes, doubles, floats, ints, longs, shorts
+    assert_eq!(vec!["[B", "[D", "[F", "[I", "[J", "[S"], sigs);
+
+    let a = Arrays {
+        bytes: vec![1, 2],
+        shorts: vec![3],
+        ints: vec![4],
+        longs: vec![5],
+        floats: vec![6.0],
+        doubles: vec![7.0],
+    };
+    assert!(!a.to_bytes().unwrap().is_empty());
+}
+
+// ---- 对象数组：与手写实现对拍 ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Team", serial_version_uid = 8)]
+struct DerivedTeam {
+    size: i32,
+    members: Vec<Address>,
+}
+
+// 手写等价物：Java 类名与 SUID 必须与 DerivedTeam 完全一致，字段顺序按
+// ObjectStreamField#compareTo（size 是基本类型排前，members 是数组排后）。
+struct HandTeam {
+    size: i32,
+    members: Vec<HandAddress>,
+}
+
+struct HandAddress {
+    city: String,
+}
+
+impl JavaObject for HandAddress {
+    fn class() -> Class {
+        Class::builder("com.example.Address", -4433675896693646393)
+            .field(Field::builder("city").string())
+            .build()
+    }
+}
+
+impl JavaSerializable for HandAddress {
+    fn fields(&self) -> Vec<FieldValue<'_>> {
+        vec![FieldValue::String(&self.city)]
+    }
+}
+
+impl JavaObject for HandTeam {
+    fn class() -> Class {
+        Class::builder("com.example.Team", 8)
+            .field(Field::builder("size").int())
+            .field(Field::builder("members").array(HandAddress::class().signature()))
+            .build()
+    }
+}
+
+impl JavaSerializable for HandTeam {
+    fn fields(&self) -> Vec<FieldValue<'_>> {
+        vec![
+            FieldValue::Int(self.size),
+            FieldValue::Array(
+                // 与 examples/example.rs 里原先硬编码的魔数同源
+                Class::class_of_array(HandAddress::class(), 7549007861314292831),
+                self.members
+                    .iter()
+                    .map(|a| (HandAddress::class(), a as &dyn JavaSerializable))
+                    .collect(),
+            ),
+        ]
+    }
+}
+
+#[test]
+fn test_derive_object_array_matches_handwritten() {
+    let derived = DerivedTeam {
+        size: 2,
+        members: vec![
+            Address { city: "Shanghai".to_string() },
+            Address { city: "Beijing".to_string() },
+        ],
+    };
+    let hand = HandTeam {
+        size: 2,
+        members: vec![
+            HandAddress { city: "Shanghai".to_string() },
+            HandAddress { city: "Beijing".to_string() },
+        ],
+    };
+
+    assert_eq!(
+        hex::encode(hand.to_bytes().unwrap()),
+        hex::encode(derived.to_bytes().unwrap())
+    );
+}
+
+#[test]
+fn test_derive_object_array_is_empty_safe() {
+    let derived = DerivedTeam {
+        size: 0,
+        members: vec![],
+    };
+    assert!(!derived.to_bytes().unwrap().is_empty());
+}
+
+// ---- 借用形式的基本类型切片 ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Borrowed", serial_version_uid = 9)]
+struct Borrowed<'a> {
+    name: &'a str,
+    payload: &'a [u8],
+}
+
+#[test]
+fn test_derive_borrowed_fields() {
+    let sigs: Vec<String> = Borrowed::class()
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
+    assert_eq!(vec!["Ljava/lang/String;", "[B"], sigs);
+
+    let b = Borrowed {
+        name: "hi",
+        payload: &[1, 2, 3],
+    };
+    assert!(!b.to_bytes().unwrap().is_empty());
+}

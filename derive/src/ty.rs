@@ -13,6 +13,10 @@ pub enum JavaTy {
     Object(Type),
     /// `Option<T>` where `T` is not a primitive.
     Nullable(Box<JavaTy>),
+    /// A JVM primitive array: (`FieldBuilder` method, `FieldValue` variant).
+    PrimArray(&'static str, &'static str),
+    /// `Vec<T>` / `&[T]` where `T` maps to `Object`; carries the element type.
+    ObjArray(Type),
 }
 
 impl JavaTy {
@@ -20,10 +24,10 @@ impl JavaTy {
         matches!(self, JavaTy::Prim(..))
     }
 
-    /// Element type when this is an object array, peeling `Option`. Always `None`
-    /// until Task 5 adds the array variants.
+    /// Element type when this is an object array, peeling `Option`.
     pub fn obj_array_elem(&self) -> Option<&Type> {
         match self {
+            JavaTy::ObjArray(elem) => Some(elem),
             JavaTy::Nullable(inner) => inner.obj_array_elem(),
             _ => None,
         }
@@ -41,6 +45,13 @@ impl JavaTy {
                 .object(<#t as ::serde_java::JavaObject>::class().signature())
             ),
             JavaTy::Nullable(inner) => inner.field_method(),
+            JavaTy::PrimArray(method, _) => {
+                let m = Ident::new(method, Span::call_site());
+                quote!(.#m())
+            }
+            JavaTy::ObjArray(elem) => quote!(
+                .array(<#elem as ::serde_java::JavaObject>::class().signature())
+            ),
         }
     }
 
@@ -71,24 +82,44 @@ impl JavaTy {
                     ::std::option::Option::None => ::serde_java::FieldValue::Null,
                 })
             }
+            JavaTy::PrimArray(_, variant) => {
+                let v = Ident::new(variant, Span::call_site());
+                quote!(::serde_java::FieldValue::#v(&#access))
+            }
+            JavaTy::ObjArray(elem) => {
+                let cached = array_class.expect(
+                    "expand.rs must supply a cached array class for every object array",
+                );
+                quote!(::serde_java::FieldValue::Array(
+                    ::core::clone::Clone::clone(&#cached),
+                    #access
+                        .iter()
+                        .map(|it| (
+                            <#elem as ::serde_java::JavaObject>::class(),
+                            it as &dyn ::serde_java::JavaSerializable,
+                        ))
+                        .collect()
+                ))
+            }
         }
     }
 }
 
 pub fn resolve(ty: &Type) -> syn::Result<JavaTy> {
     match ty {
-        // `&str` is the only reference form supported so far; Task 5 adds `&[u8]`.
         Type::Reference(r) => {
             let inner = resolve(&r.elem)?;
             match inner {
-                JavaTy::Str => Ok(inner),
+                JavaTy::Str | JavaTy::PrimArray(..) => Ok(inner),
                 _ => Err(syn::Error::new(
                     ty.span(),
-                    "reference fields are only supported for `&str` and primitive slices",
+                    "reference fields are only supported for `&str` and primitive slices \
+                     such as `&[u8]`",
                 )),
             }
         }
         Type::Path(p) => resolve_path(ty, p),
+        Type::Slice(s) => resolve_array(ty, &s.elem),
         other => Err(syn::Error::new(
             other.span(),
             "unsupported field type for `JavaSerialize`",
@@ -107,13 +138,7 @@ fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
     }
 
     match name.as_str() {
-        "Vec" => {
-            let _elem = single_generic_arg(orig, seg)?;
-            Err(syn::Error::new(
-                orig.span(),
-                "array fields are not supported yet",
-            ))
-        }
+        "Vec" => resolve_array(orig, single_generic_arg(orig, seg)?),
         "Option" => {
             let inner_ty = single_generic_arg(orig, seg)?;
             let inner = resolve(inner_ty)?;
@@ -164,6 +189,66 @@ fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
             ));
         }
         _ => JavaTy::Object(orig.clone()),
+    })
+}
+
+/// Resolves an array field from its element type. Shared by `Vec<T>` and `&[T]`.
+fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
+    let Type::Path(p) = elem else {
+        return Err(syn::Error::new(
+            orig.span(),
+            "unsupported array element type",
+        ));
+    };
+    let seg = p
+        .path
+        .segments
+        .last()
+        .ok_or_else(|| syn::Error::new(orig.span(), "unsupported array element type"))?;
+    let name = seg.ident.to_string();
+
+    if !matches!(seg.arguments, PathArguments::None) {
+        if name == "Vec" || name == "Option" {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!("arrays of `{name}<..>` are not supported"),
+            ));
+        }
+        return Ok(JavaTy::ObjArray(elem.clone()));
+    }
+
+    Ok(match name.as_str() {
+        "u8" => JavaTy::PrimArray("byte_array", "ByteArray"),
+        "i16" => JavaTy::PrimArray("short_array", "ShortArray"),
+        "i32" => JavaTy::PrimArray("int_array", "IntArray"),
+        "i64" => JavaTy::PrimArray("long_array", "LongArray"),
+        "f32" => JavaTy::PrimArray("float_array", "FloatArray"),
+        "f64" => JavaTy::PrimArray("double_array", "DoubleArray"),
+        "String" | "str" | "bool" | "u16" | "char" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!(
+                    "arrays of `{name}` are not supported: `JavaWriter::write_object` has \
+                     `todo!()` arms for BoolArray/CharArray/StringArray, and \
+                     `FieldValue::StringArray(&[&str])` cannot be built from `Vec<String>` \
+                     without allocating"
+                ),
+            ));
+        }
+        "i8" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                "`i8` arrays are not supported because `FieldValue::ByteArray` needs `&[u8]`; \
+                 use `u8` instead",
+            ));
+        }
+        "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!("`{name}` has no Java equivalent"),
+            ));
+        }
+        _ => JavaTy::ObjArray(elem.clone()),
     })
 }
 
