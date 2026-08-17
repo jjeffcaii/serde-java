@@ -1,6 +1,7 @@
 use super::JavaSerializable;
 use crate::astr::AtomString;
 use crate::misc::to_signature;
+use crate::suid::{self, ClassMetadata};
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
 use std::cmp::Ordering;
@@ -383,6 +384,28 @@ impl Class {
             .build()
     }
 
+    /// Class descriptor for `T[]` where `T` is a non-primitive class.
+    ///
+    /// Array classes declare no serialVersionUID, so the JVM falls back to
+    /// `ObjectStreamClass.computeDefaultSUID` over a synthetic descriptor: the array class
+    /// name, modifiers `public final abstract`, and no interfaces, fields, constructors or
+    /// methods. Verified against every hard-coded array SUID in this file.
+    pub fn class_of_object_array(item_class: &Class) -> Class {
+        let array_class_name = format!("[L{};", item_class.name());
+        let meta = ClassMetadata {
+            class_name: &array_class_name,
+            class_modifiers: suid::PUBLIC | suid::FINAL | suid::ABSTRACT,
+            is_interface: false,
+            interfaces: vec![],
+            fields: vec![],
+            has_static_initializer: false,
+            constructors: vec![],
+            methods: vec![],
+        };
+        let serial_version_uid = suid::compute_default_suid(&meta);
+        Class::class_of_array(Clone::clone(item_class), serial_version_uid)
+    }
+
     pub fn class_of_boolean_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
             Class::builder("[Z", 6309297032502205922)
@@ -607,6 +630,37 @@ mod tests {
         assert_eq!(
             vec!["age", "id", "addresses", "ext1", "ext2", "name"],
             actual
+        );
+    }
+
+    #[test]
+    fn test_class_of_object_array() {
+        init();
+
+        // com.example.Address 的 SUID 取自 examples/example.rs，与本断言无关；
+        // 数组类的 SUID 只取决于元素类的名字。
+        let item = Class::builder("com.example.Address", -4433675896693646393).build();
+        let arr = Class::class_of_object_array(&item);
+
+        info!("{} => {}", arr.name(), arr.serial_version_uid());
+
+        assert_eq!("[Lcom.example.Address;", arr.name());
+        assert_eq!("[Lcom/example/Address;", arr.signature());
+        // 真值来自 examples/example.rs:130 里原先硬编码的魔数
+        assert_eq!(7549007861314292831, arr.serial_version_uid());
+    }
+
+    #[test]
+    fn test_class_of_object_array_matches_builtin_string_array() {
+        init();
+
+        // 与本文件里 class_of_string_array() 的硬编码 SUID 交叉验证
+        let item = Class::builder("java.lang.String", 0).build();
+        let arr = Class::class_of_object_array(&item);
+
+        assert_eq!(
+            Class::class_of_string_array().serial_version_uid(),
+            arr.serial_version_uid()
         );
     }
 }
