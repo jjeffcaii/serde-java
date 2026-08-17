@@ -19,6 +19,16 @@ mod suid;
 pub use error::Error;
 pub use proto::*;
 
+#[cfg(feature = "derive")]
+pub use serde_java_derive::JavaSerialize;
+
+/// Implementation details used by the generated code of `#[derive(JavaSerialize)]`.
+/// Not a stable API.
+#[doc(hidden)]
+pub mod __private {
+    pub use once_cell::sync::Lazy;
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// cached string
