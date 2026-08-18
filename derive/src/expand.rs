@@ -12,6 +12,7 @@ struct Resolved {
     /// Set by `#[java(signature = "...")]`; overrides the schema side only.
     signature: Option<String>,
     is_primitive: bool,
+    span: Span,
 }
 
 pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -64,7 +65,10 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             continue;
         }
         let ident = f.ident.as_ref().expect("named field");
-        let java_name = fa.rename.clone().unwrap_or_else(|| ident.to_string());
+        let java_name = fa
+            .rename
+            .clone()
+            .unwrap_or_else(|| ident.to_string().trim_start_matches("r#").to_string());
         let jty = ty::resolve(&f.ty)?;
         if fa.signature.is_some() && jty.is_primitive() {
             return Err(syn::Error::new(
@@ -78,7 +82,25 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             is_primitive: jty.is_primitive(),
             ty: jty,
             signature: fa.signature,
+            span: f.span(),
         });
+    }
+
+    // Duplicate check is independent of sort order (and thus of primitiveness),
+    // so a `rename` collision that straddles the primitive/object boundary is
+    // still caught. Attach the error to the offending (later) field's span.
+    let mut seen: std::collections::HashMap<&str, ()> = std::collections::HashMap::new();
+    for r in &resolved {
+        if seen.contains_key(r.java_name.as_str()) {
+            return Err(syn::Error::new(
+                r.span,
+                format!(
+                    "duplicate Java field name `{}`; check your `rename` attributes",
+                    r.java_name
+                ),
+            ));
+        }
+        seen.insert(r.java_name.as_str(), ());
     }
 
     // Mirror `Field::cmp`: primitives first, then alphabetically by Java name.
@@ -86,18 +108,6 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     resolved.sort_by(|a, b| {
         (!a.is_primitive, &a.java_name).cmp(&(!b.is_primitive, &b.java_name))
     });
-
-    for w in resolved.windows(2) {
-        if w[0].java_name == w[1].java_name {
-            return Err(syn::Error::new(
-                input.ident.span(),
-                format!(
-                    "duplicate Java field name `{}`; check your `rename` attributes",
-                    w[0].java_name
-                ),
-            ));
-        }
-    }
 
     let mut field_calls: Vec<TokenStream> = Vec::new();
     let mut value_exprs: Vec<TokenStream> = Vec::new();

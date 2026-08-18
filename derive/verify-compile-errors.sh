@@ -144,6 +144,13 @@ check "duplicate java field name" \
 struct A { a: i32, #[java(rename = "a")] b: i32 }
 '
 
+check "duplicate java field name straddling primitive/object boundary" \
+    'duplicate Java field name' '
+#[derive(JavaSerialize)]
+#[java(class = "com.example.A", serial_version_uid = 1)]
+struct A { x: i32, a: String, #[java(rename = "x")] y: String }
+'
+
 check "suid out of range" \
     'does not fit in a Java `long`' '
 #[derive(JavaSerialize)]

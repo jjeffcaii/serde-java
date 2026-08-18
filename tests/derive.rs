@@ -399,3 +399,20 @@ fn test_derive_borrowed_fields() {
     };
     assert!(!b.to_bytes().unwrap().is_empty());
 }
+
+// ---- 原始标识符（raw identifier）字段名 ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.RawIdent", serial_version_uid = 10)]
+struct RawIdent {
+    r#final: i32,
+    r#type: i32,
+}
+
+#[test]
+fn test_derive_raw_identifier_field_name() {
+    let class = RawIdent::class();
+    let names: Vec<&str> = class.fields().iter().map(Field::name).collect();
+    // 去掉 `r#` 前缀后按 Java 名排序：final, type（两者都是基本类型）
+    assert_eq!(vec!["final", "type"], names);
+}
