@@ -42,3 +42,7 @@ hex = "0.4"
 [features]
 default = ["derive"]
 derive = ["dep:serde-java-derive"]
+
+[[example]]
+name = "example_derive"
+required-features = ["derive"]
