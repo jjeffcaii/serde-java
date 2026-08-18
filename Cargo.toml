@@ -1,3 +1,6 @@
+[workspace]
+members = ["derive"]
+
 [package]
 name = "serde-java"
 version = "0.0.1"
@@ -9,8 +12,11 @@ repository = "https://github.com/jjeffcaii/serde-java"
 homepage = "https://github.com/jjeffcaii/serde-java"
 description = "A Rust implementation of the Java Serialization."
 include = [
-    "**/*.rs",
+    "src/**/*.rs",
+    "build.rs",
+    "examples/**/*.rs",
     "Cargo.toml",
+    "README.md",
 ]
 
 [build-dependencies]
@@ -27,7 +33,12 @@ string_cache = "0.10"
 bitflags = "2.13"
 smallvec = { version = "1.15", features = ["write"] }
 sha1 = "0.11"
+serde-java-derive = { version = "0.0.1", path = "derive", optional = true }
 
 [dev-dependencies]
 pretty_env_logger = "0.5"
 hex = "0.4"
+
+[features]
+default = ["derive"]
+derive = ["dep:serde-java-derive"]

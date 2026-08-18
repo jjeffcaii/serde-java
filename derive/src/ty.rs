@@ -1,0 +1,279 @@
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::quote;
+use syn::spanned::Spanned;
+use syn::{GenericArgument, PathArguments, Type, TypePath};
+
+/// The Java type a Rust field maps to.
+pub enum JavaTy {
+    /// A JVM primitive: (`FieldBuilder` method, `FieldValue` variant, optional `as` cast).
+    Prim(&'static str, &'static str, Option<&'static str>),
+    /// `java.lang.String`.
+    Str,
+    /// Anything else — assumed to implement `JavaObject`.
+    Object(Type),
+    /// `Option<T>` where `T` is not a primitive.
+    Nullable(Box<JavaTy>),
+    /// A JVM primitive array: (`FieldBuilder` method, `FieldValue` variant).
+    PrimArray(&'static str, &'static str),
+    /// `Vec<T>` / `&[T]` where `T` maps to `Object`; carries the element type.
+    ObjArray(Type),
+}
+
+impl JavaTy {
+    pub fn is_primitive(&self) -> bool {
+        matches!(self, JavaTy::Prim(..))
+    }
+
+    /// Element type when this is an object array, peeling `Option`.
+    pub fn obj_array_elem(&self) -> Option<&Type> {
+        match self {
+            JavaTy::ObjArray(elem) => Some(elem),
+            JavaTy::Nullable(inner) => inner.obj_array_elem(),
+            _ => None,
+        }
+    }
+
+    /// The `FieldBuilder` call chained onto `Field::builder(name)`.
+    pub fn field_method(&self) -> TokenStream {
+        match self {
+            JavaTy::Prim(method, _, _) => {
+                let m = Ident::new(method, Span::call_site());
+                quote!(.#m())
+            }
+            JavaTy::Str => quote!(.string()),
+            JavaTy::Object(t) => quote!(
+                .object(<#t as ::serde_java::JavaObject>::class().signature())
+            ),
+            JavaTy::Nullable(inner) => inner.field_method(),
+            JavaTy::PrimArray(method, _) => {
+                let m = Ident::new(method, Span::call_site());
+                quote!(.#m())
+            }
+            JavaTy::ObjArray(elem) => quote!(
+                .array(<#elem as ::serde_java::JavaObject>::class().signature())
+            ),
+        }
+    }
+
+    /// Builds the `FieldValue` for this field. `access` is a place expression such
+    /// as `self.x`. `array_class` names the cached array-class static, used only by
+    /// the object-array variant added in Task 5.
+    pub fn value_expr(&self, access: &TokenStream, array_class: Option<&Ident>) -> TokenStream {
+        match self {
+            JavaTy::Prim(_, variant, cast) => {
+                let v = Ident::new(variant, Span::call_site());
+                match cast {
+                    Some(c) => {
+                        let c = Ident::new(c, Span::call_site());
+                        quote!(::serde_java::FieldValue::#v(#access as #c))
+                    }
+                    None => quote!(::serde_java::FieldValue::#v(#access)),
+                }
+            }
+            JavaTy::Str => quote!(::serde_java::FieldValue::String(&#access)),
+            JavaTy::Object(t) => quote!(::serde_java::FieldValue::Object(
+                <#t as ::serde_java::JavaObject>::class(),
+                &#access
+            )),
+            JavaTy::Nullable(inner) => {
+                let inner_value = inner.value_expr(&quote!((*__v)), array_class);
+                quote!(match &#access {
+                    ::std::option::Option::Some(__v) => #inner_value,
+                    ::std::option::Option::None => ::serde_java::FieldValue::Null,
+                })
+            }
+            JavaTy::PrimArray(_, variant) => {
+                let v = Ident::new(variant, Span::call_site());
+                quote!(::serde_java::FieldValue::#v(&#access))
+            }
+            JavaTy::ObjArray(elem) => {
+                let cached = array_class.expect(
+                    "expand.rs must supply a cached array class for every object array",
+                );
+                quote!(::serde_java::FieldValue::Array(
+                    ::core::clone::Clone::clone(&#cached),
+                    #access
+                        .iter()
+                        .map(|it| (
+                            <#elem as ::serde_java::JavaObject>::class(),
+                            it as &dyn ::serde_java::JavaSerializable,
+                        ))
+                        .collect()
+                ))
+            }
+        }
+    }
+}
+
+pub fn resolve(ty: &Type) -> syn::Result<JavaTy> {
+    match ty {
+        Type::Reference(r) => {
+            let inner = resolve(&r.elem)?;
+            match inner {
+                JavaTy::Str | JavaTy::PrimArray(..) => Ok(inner),
+                _ => Err(syn::Error::new(
+                    ty.span(),
+                    "reference fields are only supported for `&str` and primitive slices \
+                     such as `&[u8]`",
+                )),
+            }
+        }
+        Type::Path(p) => resolve_path(ty, p),
+        Type::Slice(s) => resolve_array(ty, &s.elem),
+        other => Err(syn::Error::new(
+            other.span(),
+            "unsupported field type for `JavaSerialize`",
+        )),
+    }
+}
+
+fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
+    let seg = p.path.segments.last().ok_or_else(|| {
+        syn::Error::new(orig.span(), "unsupported field type for `JavaSerialize`")
+    })?;
+    let name = seg.ident.to_string();
+
+    if matches!(seg.arguments, PathArguments::None) {
+        return scalar(orig, &name);
+    }
+
+    match name.as_str() {
+        "Vec" => resolve_array(orig, single_generic_arg(orig, seg)?),
+        "Option" => {
+            let inner_ty = single_generic_arg(orig, seg)?;
+            let inner = resolve(inner_ty)?;
+            if inner.is_primitive() {
+                return Err(syn::Error::new(
+                    orig.span(),
+                    "Java primitives cannot be null; drop the `Option`, or use an object type",
+                ));
+            }
+            if matches!(inner, JavaTy::Nullable(_)) {
+                return Err(syn::Error::new(
+                    orig.span(),
+                    "nested `Option` has no Java equivalent",
+                ));
+            }
+            Ok(JavaTy::Nullable(Box::new(inner)))
+        }
+        // A generic path such as `HashMap<K, V>` is treated as an opaque JavaObject.
+        _ => Ok(JavaTy::Object(orig.clone())),
+    }
+}
+
+fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
+    Ok(match name {
+        "bool" => JavaTy::Prim("boolean", "Bool", None),
+        "i8" => JavaTy::Prim("byte", "Byte", Some("u8")),
+        "u8" => JavaTy::Prim("byte", "Byte", None),
+        "u16" => JavaTy::Prim("char", "Char", None),
+        "i16" => JavaTy::Prim("short", "Short", None),
+        "i32" => JavaTy::Prim("int", "Int", None),
+        "i64" => JavaTy::Prim("long", "Long", None),
+        "f32" => JavaTy::Prim("float", "Float", None),
+        "f64" => JavaTy::Prim("double", "Double", None),
+        "String" | "str" => JavaTy::Str,
+        "char" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                "Rust `char` is 4 bytes and does not match Java's 2-byte `char`; use `u16`",
+            ));
+        }
+        "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!(
+                    "`{name}` has no Java equivalent; use one of \
+                     i8/u8/u16/i16/i32/i64/f32/f64"
+                ),
+            ));
+        }
+        _ => JavaTy::Object(orig.clone()),
+    })
+}
+
+/// Resolves an array field from its element type. Shared by `Vec<T>` and `&[T]`.
+fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
+    let Type::Path(p) = elem else {
+        return Err(syn::Error::new(
+            orig.span(),
+            "unsupported array element type",
+        ));
+    };
+    let seg = p
+        .path
+        .segments
+        .last()
+        .ok_or_else(|| syn::Error::new(orig.span(), "unsupported array element type"))?;
+    let name = seg.ident.to_string();
+
+    if !matches!(seg.arguments, PathArguments::None) {
+        if name == "Vec" || name == "Option" {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!("arrays of `{name}<..>` are not supported"),
+            ));
+        }
+        return Ok(JavaTy::ObjArray(elem.clone()));
+    }
+
+    Ok(match name.as_str() {
+        "u8" => JavaTy::PrimArray("byte_array", "ByteArray"),
+        "i16" => JavaTy::PrimArray("short_array", "ShortArray"),
+        "i32" => JavaTy::PrimArray("int_array", "IntArray"),
+        "i64" => JavaTy::PrimArray("long_array", "LongArray"),
+        "f32" => JavaTy::PrimArray("float_array", "FloatArray"),
+        "f64" => JavaTy::PrimArray("double_array", "DoubleArray"),
+        "String" | "str" | "bool" | "u16" | "char" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!(
+                    "arrays of `{name}` are not supported: `JavaWriter::write_object` has \
+                     `todo!()` arms for BoolArray/CharArray/StringArray, and \
+                     `FieldValue::StringArray(&[&str])` cannot be built from `Vec<String>` \
+                     without allocating"
+                ),
+            ));
+        }
+        "i8" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                "`i8` arrays are not supported because `FieldValue::ByteArray` needs `&[u8]`; \
+                 use `u8` instead",
+            ));
+        }
+        "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {
+            return Err(syn::Error::new(
+                orig.span(),
+                format!("`{name}` has no Java equivalent"),
+            ));
+        }
+        _ => JavaTy::ObjArray(elem.clone()),
+    })
+}
+
+pub(crate) fn single_generic_arg<'a>(
+    orig: &Type,
+    seg: &'a syn::PathSegment,
+) -> syn::Result<&'a Type> {
+    let PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return Err(syn::Error::new(
+            orig.span(),
+            "expected exactly one generic type argument",
+        ));
+    };
+    let mut types = args.args.iter().filter_map(|a| match a {
+        GenericArgument::Type(t) => Some(t),
+        _ => None,
+    });
+    let first = types.next().ok_or_else(|| {
+        syn::Error::new(orig.span(), "expected exactly one generic type argument")
+    })?;
+    if types.next().is_some() {
+        return Err(syn::Error::new(
+            orig.span(),
+            "expected exactly one generic type argument",
+        ));
+    }
+    Ok(first)
+}

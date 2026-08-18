@@ -1,0 +1,21 @@
+[package]
+name = "serde-java-derive"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Jeffsky Tsai <jjeffcaii@outlook.com>"]
+repository = "https://github.com/jjeffcaii/serde-java"
+homepage = "https://github.com/jjeffcaii/serde-java"
+description = "Derive macros for serde-java."
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
