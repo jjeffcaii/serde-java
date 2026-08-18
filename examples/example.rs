@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate log;
-
 use once_cell::sync::Lazy;
 use serde_java::*;
 
@@ -140,8 +137,6 @@ impl JavaSerializable for User {
 }
 
 fn main() -> anyhow::Result<()> {
-    pretty_env_logger::try_init_timed().ok();
-
     let user = User {
         id: 123,
         name: "Jack".to_string(),
@@ -154,7 +149,7 @@ fn main() -> anyhow::Result<()> {
         ext2: ExtInfo::new(888, "k888", "v888"),
     };
 
-    info!("{:?}: {}", &user, hex::encode(&user.to_bytes()?));
+    println!("{:?}: {}", &user, hex::encode(&user.to_bytes()?));
 
     Ok(())
 }

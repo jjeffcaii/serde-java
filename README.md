@@ -209,8 +209,8 @@ struct User {
 streams:
 
 ```sh
-RUST_LOG=info cargo run --example example         # hand-written impls
-RUST_LOG=info cargo run --example example_derive  # the same stream, derived
+cargo run --example example         # hand-written impls
+cargo run --example example_derive  # the same stream, derived
 ```
 
 ## Computing `serialVersionUID`
