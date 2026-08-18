@@ -52,8 +52,7 @@ struct Demo {
 impl JavaObject for Demo {
     fn class() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("com.example.Demo")
-                .serial_version_uid(5151422842377556126)
+            Class::builder("com.example.Demo", 5151422842377556126)
                 .field(Field::builder("i").int())
                 .field(Field::builder("message").string())
                 .build()
@@ -101,6 +100,42 @@ Two traits do the work:
 `to_bytes()` / `to_file()` come free via the blanket `JavaSerializableExt` impl. For streaming into an arbitrary
 `io::Write`, use `JavaWriter::new(w)` plus `write_to(&mut w, &obj)` directly.
 
+## `#[derive(JavaSerialize)]`
+
+For a plain struct with named fields, you don't have to hand-write `JavaObject`/`JavaSerializable` at all —
+`#[derive(JavaSerialize)]` (on by default via the `derive` feature) generates both impls, with fields sorted into the
+primitive-then-alphabetical order Java expects:
+
+```rust
+use serde_java::*;
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Demo", serial_version_uid = 5151422842377556126)]
+struct Demo {
+    i: i32,
+    message: String,
+}
+```
+
+This produces the same byte stream as the hand-written `Demo` above. Both container attributes are required — the
+`serial_version_uid` can't be derived from the Rust side, since Java's default algorithm hashes method and
+constructor signatures that don't exist in Rust.
+
+Field attributes:
+
+- `#[java(rename = "...")]` — changes the Java-side field name (and therefore its sort position)
+- `#[java(skip)]` — Java `transient`; omitted from both schema and value
+- `#[java(signature = "...")]` — overrides the declared descriptor signature only; the value side still follows the
+  Rust type
+
+Supported field types: the Java primitives (`bool`, `i8`, `u8`, `u16`, `i16`, `i32`, `i64`, `f32`, `f64`),
+`String`/`&str`, primitive arrays (`Vec<u8|i16|i32|i64|f32|f64>` or the equivalent `&[T]` slices), object arrays
+(`Vec<T>`), `Option<T>` for non-primitive `T`, and nested types implementing `JavaObject`. Struct lifetime
+parameters are fine; type/const generics, tuple/unit structs, enums, and unions are rejected at compile time, as are
+`char`, the wider integer types (`u32`/`u64`/`usize`/`isize`/`i128`/`u128`), `Vec<String>`/`Vec<bool>`/`Vec<u16>`,
+`Option<primitive>`, and doubly-nested collections (`Vec<Vec<T>>`, `Vec<Option<T>>`, `Option<Option<T>>`). Every
+rejection is a compile-time `syn::Error` at the offending span, not a runtime surprise.
+
 ## Field order is not declaration order
 
 This is the single easiest thing to get wrong. `ObjectStreamClass` sorts fields the way the JVM does: **all primitive
@@ -124,8 +159,7 @@ is described in Rust as `age`, `id` (primitives, alphabetical), then `addresses`
 alphabetical):
 
 ```rust
-Class::builder("com.example.User")
-    .serial_version_uid(4956385333250593913)
+Class::builder("com.example.User", 4956385333250593913)
     .field(Field::builder("age").int())
     .field(Field::builder("id").long())
     .field(Field::builder("addresses").array(Address::class().signature()))
@@ -241,7 +275,10 @@ Pre-built descriptions of common JDK types live in `serde_java::ext` (currently 
   `suppressedExceptions` (its round-trip test is `#[ignore]`d for that reason). `StackTraceElement` is complete.
 - **`suid` is not exported.** `compute_default_suid` and friends live behind a private `mod suid;`, so they are only
   reachable from inside the crate today.
-- Schema/value agreement is entirely on the caller; there is no derive macro or reflection.
+- **The derive macro covers common cases only.** `#[derive(JavaSerialize)]` doesn't support generic structs, enums,
+  tuple/unit structs, superclass chains, or `ClassFlags::WRITE_METHOD`; for those, schema/value agreement is on the
+  caller via the hand-written path (see [Field order is not declaration order](#field-order-is-not-declaration-order)).
+  There is still no reflection — Rust has no runtime access to a real Java class's shape.
 
 ## Development
 
