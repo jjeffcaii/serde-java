@@ -18,7 +18,7 @@ pub(crate) fn to_signature(name: &str) -> AtomString {
 
 const N: usize = 32;
 
-/// 编码为 Java modified-UTF-8，返回 (字节数据, utf16_code_unit_count)
+/// Encodes to Java modified-UTF-8, returning (bytes, utf16_code_unit_count).
 pub fn to_modified_utf8(s: &str) -> (SmallVec<[u8; N]>, u16) {
     let mut out = SmallVec::<[u8; N]>::with_capacity(s.len());
     let mut count: u16 = 0;

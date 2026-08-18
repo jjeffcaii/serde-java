@@ -226,7 +226,7 @@ mod tests {
         Ok(())
     }
 
-    // 写进内存 buffer 场景：
+    // Writing into an in-memory buffer:
     // let mut buf = Vec::new();
     // let mut w = JavaWriter::new(&mut buf)?;
 }

@@ -637,8 +637,8 @@ mod tests {
     fn test_class_of_object_array() {
         init();
 
-        // com.example.Address 的 SUID 取自 examples/example.rs，与本断言无关；
-        // 数组类的 SUID 只取决于元素类的名字。
+        // com.example.Address's own SUID comes from examples/example.rs and is irrelevant here:
+        // an array class's SUID depends only on the element class's name.
         let item = Class::builder("com.example.Address", -4433675896693646393).build();
         let arr = Class::class_of_object_array(&item);
 
@@ -646,7 +646,7 @@ mod tests {
 
         assert_eq!("[Lcom.example.Address;", arr.name());
         assert_eq!("[Lcom/example/Address;", arr.signature());
-        // 真值来自 examples/example.rs:130 里原先硬编码的魔数
+        // Expected value: the magic number that used to be hard-coded at examples/example.rs:130
         assert_eq!(7549007861314292831, arr.serial_version_uid());
     }
 
@@ -654,7 +654,7 @@ mod tests {
     fn test_class_of_object_array_matches_builtin_string_array() {
         init();
 
-        // 与本文件里 class_of_string_array() 的硬编码 SUID 交叉验证
+        // Cross-check against the hard-coded SUID in this file's class_of_string_array()
         let item = Class::builder("java.lang.String", 0).build();
         let arr = Class::class_of_object_array(&item);
 

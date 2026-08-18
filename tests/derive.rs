@@ -2,7 +2,7 @@
 
 use serde_java::*;
 
-// ---- 复用 src/proto/mod.rs 测试里那条来自真实 ObjectOutputStream 的 fixture ----
+// ---- Reuses the real-ObjectOutputStream fixture from src/proto/mod.rs's tests ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Demo", serial_version_uid = 5151422842377556126)]
@@ -24,7 +24,7 @@ fn test_derive_matches_demo_fixture() {
     );
 }
 
-// ---- 嵌套对象，同样对已知 fixture ----
+// ---- Nested objects, again against a known fixture ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Address", serial_version_uid = -4433675896693646393)]
@@ -54,7 +54,7 @@ fn test_derive_matches_order_fixture() {
     );
 }
 
-// ---- 排序：声明顺序刻意打乱，断言 class() 里的字段顺序 ----
+// ---- Ordering: declaration order is deliberately shuffled; assert the order in class() ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Shuffled", serial_version_uid = 1)]
@@ -69,7 +69,7 @@ struct Shuffled {
 fn test_derive_field_order() {
     let class = Shuffled::class();
     let names: Vec<&str> = class.fields().iter().map(Field::name).collect();
-    // 基本类型在前（beta:I, yak:J 按名字排），然后对象（alpha, zebra 按名字排）
+    // Primitives first (beta:I, yak:J by name), then objects (alpha, zebra by name)
     assert_eq!(vec!["beta", "yak", "alpha", "zebra"], names);
 }
 
@@ -113,7 +113,7 @@ fn test_derive_all_scalar_types() {
         i_f64: 8.0,
         j_string: "x".to_string(),
     };
-    // 只验证能跑通、不 panic
+    // Only checks that it runs without panicking
     assert!(!s.to_bytes().unwrap().is_empty());
 }
 
@@ -122,7 +122,7 @@ fn test_derive_all_scalar_types() {
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Renamed", serial_version_uid = 3)]
 struct Renamed {
-    // 改名后应排到 "beta" 之前（对象组按 Java 名排序，不是 Rust 名）
+    // Once renamed this sorts before "beta": the object group sorts by Java name, not Rust name
     #[java(rename = "aaa")]
     zzz: Address,
     beta: Address,
@@ -142,9 +142,9 @@ fn test_derive_rename_affects_wire_field_name() {
         beta: Address { city: "LA".to_string() },
     };
     let hex = hex::encode(r.to_bytes().unwrap());
-    // "aaa" 的 modified-UTF-8 是 616161，长度前缀 0003
+    // "aaa" in modified UTF-8 is 616161, with the length prefix 0003
     assert!(hex.contains("0003616161"), "missing renamed field: {hex}");
-    // Rust 侧字段名不应出现在流里
+    // The Rust-side field name must not appear in the stream
     assert!(!hex.contains("7a7a7a"), "rust field name leaked: {hex}");
 }
 
@@ -171,7 +171,7 @@ fn test_derive_skip() {
         ignored: Default::default(),
         also_ignored: 1.5,
     };
-    // fields() 也只产出一个值，与 class() 对齐
+    // fields() yields a single value too, matching class()
     assert_eq!(1, s.fields().len());
 }
 
@@ -180,7 +180,7 @@ fn test_derive_skip() {
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Declared", serial_version_uid = 5)]
 struct Declared {
-    // Java 侧声明为接口类型，实际写入的对象仍是 com.example.Address
+    // Declared as an interface type on the Java side; the object written is still com.example.Address
     #[java(signature = "Ljava/util/Map;")]
     lookup: Address,
     #[java(signature = "[Ljava/lang/Object;")]
@@ -189,12 +189,13 @@ struct Declared {
 
 #[test]
 fn test_derive_signature_override() {
-    // 只检查 schema 侧。故意不序列化 Declared：`raw` 的描述符声明成
-    // [Ljava/lang/Object; 而值侧仍写一个 com.example.Address 对象，这样的流
-    // JVM 是会拒的 —— 本测试要验的只是 signature 有没有原样落进描述符。
+    // Schema side only. Declared is deliberately not serialized: `raw` declares the descriptor
+    // [Ljava/lang/Object; while the value side still writes a com.example.Address object. That is
+    // exactly what a Java field declared `Object[]` holding an `Address[]` looks like, but this
+    // test only checks that `signature` lands in the descriptor verbatim.
     let class = Declared::class();
     let sigs: Vec<String> = class.fields().iter().map(|f| f.kind().to_string()).collect();
-    // 顺序：都是对象组，按 Java 名排 -> lookup, raw
+    // Order: both are in the object group, sorted by Java name -> lookup, raw
     assert_eq!(vec!["Ljava/util/Map;", "[Ljava/lang/Object;"], sigs);
 }
 
@@ -215,7 +216,7 @@ fn test_derive_option_schema_matches_inner() {
         .iter()
         .map(|f| f.kind().to_string())
         .collect();
-    // id 是基本类型排最前；home / note 按 Java 名排序
+    // id is a primitive and comes first; home / note sort by Java name
     assert_eq!(
         vec!["I", "Lcom/example/Address;", "Ljava/lang/String;"],
         sigs
@@ -230,7 +231,7 @@ fn test_derive_option_none_writes_null() {
         home: None,
     };
     let hex = hex::encode(n.to_bytes().unwrap());
-    // 字段值区在 classdesc 之后：int 0x00000001，然后两个 TC_NULL (0x70)
+    // The field-value section follows the classdesc: int 0x00000001, then two TC_NULL (0x70)
     assert!(hex.ends_with("000000017070"), "unexpected tail: {hex}");
 }
 
@@ -249,7 +250,7 @@ fn test_derive_option_some_writes_value() {
     assert!(!hex.ends_with("7070"), "should not be null: {hex}");
 }
 
-// ---- 基本类型数组 ----
+// ---- Primitive arrays ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Arrays", serial_version_uid = 7)]
@@ -269,7 +270,7 @@ fn test_derive_primitive_arrays() {
         .iter()
         .map(|f| f.kind().to_string())
         .collect();
-    // 全是对象组（数组不是 primitive），按 Java 名排序：
+    // All in the object group (an array is not a primitive), sorted by Java name:
     // bytes, doubles, floats, ints, longs, shorts
     assert_eq!(vec!["[B", "[D", "[F", "[I", "[J", "[S"], sigs);
 
@@ -284,7 +285,7 @@ fn test_derive_primitive_arrays() {
     assert!(!a.to_bytes().unwrap().is_empty());
 }
 
-// ---- 对象数组：与手写实现对拍 ----
+// ---- Object arrays: cross-checked against a hand-written impl ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Team", serial_version_uid = 8)]
@@ -293,8 +294,8 @@ struct DerivedTeam {
     members: Vec<Address>,
 }
 
-// 手写等价物：Java 类名与 SUID 必须与 DerivedTeam 完全一致，字段顺序按
-// ObjectStreamField#compareTo（size 是基本类型排前，members 是数组排后）。
+// The hand-written equivalent: the Java class names and SUIDs must match DerivedTeam exactly, and
+// the fields follow ObjectStreamField#compareTo (primitive size first, array members after).
 struct HandTeam {
     size: i32,
     members: Vec<HandAddress>,
@@ -332,7 +333,7 @@ impl JavaSerializable for HandTeam {
         vec![
             FieldValue::Int(self.size),
             FieldValue::Array(
-                // 与 examples/example.rs 里原先硬编码的魔数同源
+                // Same magic number that used to be hard-coded in examples/example.rs
                 Class::class_of_array(HandAddress::class(), 7549007861314292831),
                 self.members
                     .iter()
@@ -375,7 +376,7 @@ fn test_derive_object_array_is_empty_safe() {
     assert!(!derived.to_bytes().unwrap().is_empty());
 }
 
-// ---- 借用形式的基本类型切片 ----
+// ---- Borrowed primitive slices ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Borrowed", serial_version_uid = 9)]
@@ -400,7 +401,7 @@ fn test_derive_borrowed_fields() {
     assert!(!b.to_bytes().unwrap().is_empty());
 }
 
-// ---- 原始标识符（raw identifier）字段名 ----
+// ---- Raw-identifier field names ----
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.RawIdent", serial_version_uid = 10)]
@@ -413,6 +414,6 @@ struct RawIdent {
 fn test_derive_raw_identifier_field_name() {
     let class = RawIdent::class();
     let names: Vec<&str> = class.fields().iter().map(Field::name).collect();
-    // 去掉 `r#` 前缀后按 Java 名排序：final, type（两者都是基本类型）
+    // Sorted by Java name once the `r#` prefix is stripped: final, type (both primitives)
     assert_eq!(vec!["final", "type"], names);
 }

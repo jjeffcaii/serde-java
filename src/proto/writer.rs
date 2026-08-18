@@ -5,7 +5,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use hashbrown::HashMap;
 use std::io;
 
-// Stream 头
+// Stream header
 const STREAM_MAGIC: u16 = 0xaced;
 const STREAM_VERSION: u16 = 0x0005;
 
@@ -26,7 +26,7 @@ const TC_LONGSTRING: u8 = 0x7c;
 const TC_PROXYCLASSDESC: u8 = 0x7d;
 const TC_ENUM: u8 = 0x7e;
 const TC_MAX: u8 = 0x7e;
-const TC_NULLREF: u8 = 0x70; // 别名
+const TC_NULLREF: u8 = 0x70; // alias
 
 const BASE_WIRE_HANDLE: u32 = 0x7e0000;
 
@@ -307,7 +307,7 @@ impl<W: io::Write> JavaWriter<W> {
             }
         }
 
-        self.put_u8(TC_ENDBLOCKDATA)?; // classAnnotation 结束
+        self.put_u8(TC_ENDBLOCKDATA)?; // end of classAnnotation
 
         match cd.super_class() {
             Some(sup) => {
@@ -390,7 +390,7 @@ impl<W: io::Write> JavaWriter<W> {
         Ok(h)
     }
 
-    /// SC_WRITE_METHOD 类：字段写完后追加自定义 block data
+    /// SC_WRITE_METHOD classes: custom block data is appended after the fields.
     #[inline]
     pub fn write_custom_block(&mut self, data: &[u8]) -> io::Result<()> {
         let size = data.len();
