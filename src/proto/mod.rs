@@ -5,7 +5,7 @@ pub use class::*;
 use std::fs::File;
 use std::io;
 use std::path::Path;
-pub(crate) use writer::*;
+pub use writer::*;
 
 pub trait JavaObject {
     fn class() -> Class;
