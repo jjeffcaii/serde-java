@@ -5,7 +5,7 @@ use syn::{GenericArgument, PathArguments, Type, TypePath};
 
 /// The Java type a Rust field maps to.
 pub enum JavaTy {
-    /// A JVM primitive: (`FieldBuilder` method, `FieldValue` variant, optional `as` cast).
+    /// A JVM primitive: (`FieldBuilder` method, `JavaWriter` method, optional `as` cast).
     Prim(&'static str, &'static str, Option<&'static str>),
     /// `java.lang.String`.
     Str,
@@ -13,7 +13,7 @@ pub enum JavaTy {
     Object(Type),
     /// `Option<T>` where `T` is not a primitive.
     Nullable(Box<JavaTy>),
-    /// A JVM primitive array: (`FieldBuilder` method, `FieldValue` variant).
+    /// A JVM primitive array: (`FieldBuilder` method, `JavaWriter` method).
     PrimArray(&'static str, &'static str),
     /// `Vec<T>` / `&[T]` where `T` maps to `Object`; carries the element type.
     ObjArray(Type),
@@ -55,51 +55,45 @@ impl JavaTy {
         }
     }
 
-    /// Builds the `FieldValue` for this field. `access` is a place expression such
-    /// as `self.x`. `array_class` names the cached array-class static, used only by
-    /// the object-array variant added in Task 5.
-    pub fn value_expr(&self, access: &TokenStream, array_class: Option<&Ident>) -> TokenStream {
+    /// The statements that write this field's value through the writer bound to `w`.
+    /// `access` is a place expression such as `self.x`. `array_class` names the cached
+    /// array-class static, used only by the object-array variant.
+    pub fn write_stmts(&self, access: &TokenStream, array_class: Option<&Ident>) -> TokenStream {
         match self {
-            JavaTy::Prim(_, variant, cast) => {
-                let v = Ident::new(variant, Span::call_site());
+            JavaTy::Prim(_, method, cast) => {
+                let m = Ident::new(method, Span::call_site());
                 match cast {
                     Some(c) => {
                         let c = Ident::new(c, Span::call_site());
-                        quote!(::serde_java::FieldValue::#v(#access as #c))
+                        quote!(w.#m(#access as #c)?;)
                     }
-                    None => quote!(::serde_java::FieldValue::#v(#access)),
+                    None => quote!(w.#m(#access)?;),
                 }
             }
-            JavaTy::Str => quote!(::serde_java::FieldValue::String(&#access)),
-            JavaTy::Object(t) => quote!(::serde_java::FieldValue::Object(
-                <#t as ::serde_java::JavaObject>::class(),
-                &#access
-            )),
+            JavaTy::Str => quote!(w.write_string(&#access)?;),
+            JavaTy::Object(t) => quote!(
+                <#t as ::serde_java::JavaWriteable>::write_to(&#access, w)?;
+            ),
             JavaTy::Nullable(inner) => {
-                let inner_value = inner.value_expr(&quote!((*__v)), array_class);
+                let inner_stmts = inner.write_stmts(&quote!((*__v)), array_class);
                 quote!(match &#access {
-                    ::std::option::Option::Some(__v) => #inner_value,
-                    ::std::option::Option::None => ::serde_java::FieldValue::Null,
+                    ::std::option::Option::Some(__v) => { #inner_stmts }
+                    ::std::option::Option::None => { w.write_null()?; }
                 })
             }
-            JavaTy::PrimArray(_, variant) => {
-                let v = Ident::new(variant, Span::call_site());
-                quote!(::serde_java::FieldValue::#v(&#access))
+            JavaTy::PrimArray(_, method) => {
+                let m = Ident::new(method, Span::call_site());
+                quote!(w.#m(&#access)?;)
             }
             JavaTy::ObjArray(elem) => {
-                let cached = array_class.expect(
-                    "expand.rs must supply a cached array class for every object array",
-                );
-                quote!(::serde_java::FieldValue::Array(
-                    ::core::clone::Clone::clone(&#cached),
-                    #access
-                        .iter()
-                        .map(|it| (
-                            <#elem as ::serde_java::JavaObject>::class(),
-                            it as &dyn ::serde_java::JavaSerializable,
-                        ))
-                        .collect()
-                ))
+                let cached = array_class
+                    .expect("expand.rs must supply a cached array class for every object array");
+                quote!(
+                    w.begin_array(&#cached, #access.len())?;
+                    for __it in #access.iter() {
+                        <#elem as ::serde_java::JavaWriteable>::write_to(__it, w)?;
+                    }
+                )
             }
         }
     }
@@ -163,15 +157,15 @@ fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
 
 fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
     Ok(match name {
-        "bool" => JavaTy::Prim("boolean", "Bool", None),
-        "i8" => JavaTy::Prim("byte", "Byte", Some("u8")),
-        "u8" => JavaTy::Prim("byte", "Byte", None),
-        "u16" => JavaTy::Prim("char", "Char", None),
-        "i16" => JavaTy::Prim("short", "Short", None),
-        "i32" => JavaTy::Prim("int", "Int", None),
-        "i64" => JavaTy::Prim("long", "Long", None),
-        "f32" => JavaTy::Prim("float", "Float", None),
-        "f64" => JavaTy::Prim("double", "Double", None),
+        "bool" => JavaTy::Prim("boolean", "write_bool", None),
+        "i8" => JavaTy::Prim("byte", "write_byte", Some("u8")),
+        "u8" => JavaTy::Prim("byte", "write_byte", None),
+        "u16" => JavaTy::Prim("char", "write_char", None),
+        "i16" => JavaTy::Prim("short", "write_short", None),
+        "i32" => JavaTy::Prim("int", "write_int", None),
+        "i64" => JavaTy::Prim("long", "write_long", None),
+        "f32" => JavaTy::Prim("float", "write_float", None),
+        "f64" => JavaTy::Prim("double", "write_double", None),
         "String" | "str" => JavaTy::Str,
         "char" => {
             return Err(syn::Error::new(
@@ -218,28 +212,26 @@ fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
     }
 
     Ok(match name.as_str() {
-        "u8" => JavaTy::PrimArray("byte_array", "ByteArray"),
-        "i16" => JavaTy::PrimArray("short_array", "ShortArray"),
-        "i32" => JavaTy::PrimArray("int_array", "IntArray"),
-        "i64" => JavaTy::PrimArray("long_array", "LongArray"),
-        "f32" => JavaTy::PrimArray("float_array", "FloatArray"),
-        "f64" => JavaTy::PrimArray("double_array", "DoubleArray"),
+        "u8" => JavaTy::PrimArray("byte_array", "write_byte_array"),
+        "i16" => JavaTy::PrimArray("short_array", "write_short_array"),
+        "i32" => JavaTy::PrimArray("int_array", "write_int_array"),
+        "i64" => JavaTy::PrimArray("long_array", "write_long_array"),
+        "f32" => JavaTy::PrimArray("float_array", "write_float_array"),
+        "f64" => JavaTy::PrimArray("double_array", "write_double_array"),
         "String" | "str" | "bool" | "u16" | "char" => {
             return Err(syn::Error::new(
                 orig.span(),
                 format!(
-                    "arrays of `{name}` are not supported: `JavaWriter::write_object` has \
-                     `todo!()` arms for BoolArray/CharArray/StringArray, and \
-                     `FieldValue::StringArray(&[&str])` cannot be built from `Vec<String>` \
-                     without allocating"
+                    "arrays of `{name}` are not supported yet: `#[derive(JavaSerialize)]` \
+                     has no value-side writer wired up for them"
                 ),
             ));
         }
         "i8" => {
             return Err(syn::Error::new(
                 orig.span(),
-                "`i8` arrays are not supported because `FieldValue::ByteArray` needs `&[u8]`; \
-                 use `u8` instead",
+                "`i8` arrays are not supported because `JavaWriter::write_byte_array` needs \
+                 `&[u8]`; use `u8` instead",
             ));
         }
         "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {

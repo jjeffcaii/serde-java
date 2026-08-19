@@ -85,20 +85,29 @@ signatures, which don't exist here. Read it off the Java class, or compute it (s
 Note that the struct declares `i` and `message` in the Java class's order; the derive re-sorts them at expansion time
 into the order the JVM expects (see [Field order is not declaration order](#field-order-is-not-declaration-order)).
 
-## The two traits behind the derive
+## The traits behind the derive
 
 The derive writes two impls, and you can write them yourself instead — the JVM cannot tell the two apart, the byte
 streams are identical:
 
 - **`JavaObject::class()`** — the *schema*: the Java class's name, `serialVersionUID`, and ordered field list. Build it
   once in a `static Lazy<Class>`; `Class` is `Arc`-backed, so handing out clones is cheap.
-- **`JavaSerializable::fields()`** — the *instance*: one `FieldValue` per field, in the same order as the schema.
+- **`JavaSerializable::write_object(&self, w)`** — the *instance*: write each field's value through `w`, in the same
+  order as the schema. Values only — the `TC_OBJECT` tag, the class descriptor and the handle bookkeeping are not
+  your job here.
+
+A third trait, **`JavaWriteable`**, is what you actually call. It is blanket-implemented for every
+`JavaObject + JavaSerializable`, and its `write_to(w)` is what emits `TC_OBJECT` + the class descriptor and then
+delegates to `write_object`; `to_bytes()` and `to_file()` sit on top of it. It is *also* implemented directly for the
+Rust primitives and `String`/`str`, where it writes the bare value with no object header — which is what makes
+`self.i.write_to(w)?` below work.
 
 By hand, that same `Demo` is:
 
 ```rust
 use once_cell::sync::Lazy;
 use serde_java::*;
+use std::io;
 
 struct Demo {
     i: i32,
@@ -118,18 +127,31 @@ impl JavaObject for Demo {
 }
 
 impl JavaSerializable for Demo {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![FieldValue::Int(self.i), FieldValue::String(&self.message)]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.i.write_to(w)?;        // or, equivalently: w.write_int(self.i)?
+        self.message.write_to(w)?;  // or: w.write_string(&self.message)?
+        Ok(())
     }
 }
 ```
 
-`to_bytes()` / `to_file()` come free via the blanket `JavaSerializableExt` impl. For streaming into an arbitrary
-`io::Write`, use `JavaWriter::new(w)` plus `write_to(&mut w, &obj)` directly.
+A nested object is just `self.address.write_to(w)?` (that one *does* write a full `TC_OBJECT`), and a null reference
+is `w.write_null()?`.
 
-Hand-writing is the fallback for what the derive doesn't cover — superclass chains, custom `writeObject`, generic
-structs — and there it's on you to keep `fields()` in step with `class()`: nothing validates the count, the order, or
-the types.
+`to_bytes()` / `to_file()` come free with `JavaWriteable`. To stream into an arbitrary `io::Write` instead:
+
+```rust
+let mut w = JavaWriter::new(&mut sink)?;  // writes the stream header
+w.with_dyn(|w| demo.write_to(w))?;
+```
+
+`with_dyn` hands `write_to` the type-erased `JavaWriter<&mut dyn io::Write>` it expects, over the same sink, keeping
+handle allocation and the string/class back-reference tables in sync.
+
+Hand-writing is the fallback for what the derive doesn't cover — superclass chains
+(`Object::<Child, Parent>::builder(class).this(&child).extends(&parent)`), custom `writeObject`, generic structs — and
+there it's on you to keep `write_object()` in step with `class()`: nothing validates the count, the order, or the
+types.
 
 ## Derive attributes and supported types
 
@@ -156,8 +178,8 @@ primitive fields first, then all object/array fields, each group sorted alphabet
 must list them in *that* order, not in the order the Java source declares them.
 
 `#[derive(JavaSerialize)]` does this for you at expansion time — declare the fields in whatever order reads best
-(matching the Java source is the obvious choice) and the generated `class()` and `fields()` are sorted together, from
-the same list. The rest of this section is about the hand-written path.
+(matching the Java source is the obvious choice) and the generated `class()` and `write_object()` are sorted
+together, from the same list. The rest of this section is about the hand-written path.
 
 So this Java class:
 
@@ -186,8 +208,8 @@ Class::builder("com.example.User", 4956385333250593913)
     .build()
 ```
 
-`fields()` must then return values in that same order. Nothing validates this — not the count, not the order, not the
-types. A mismatch yields a stream the JVM rejects or, worse, silently mis-binds.
+`write_object()` must then write the values in that same order. Nothing validates this — not the count, not the
+order, not the types. A mismatch yields a stream the JVM rejects or, worse, silently mis-binds.
 
 The derived version of the same class declares its fields in the Java source's order and needs neither the sort nor
 the `[Lcom/example/Address;` array-class magic number:
@@ -277,21 +299,27 @@ it is currently **internal** — make it `pub mod suid;` (or re-export the items
 
 ## Type mapping
 
-| Java         | Rust field type (derive)  | Schema (`Field::builder(name)`)    | Value (`FieldValue`)     |
-| ------------ | ------------------------- | ---------------------------------- | ------------------------ |
-| `boolean`    | `bool`                    | `.boolean()`                       | `Bool(bool)`             |
-| `byte`       | `u8` or `i8`              | `.byte()`                          | `Byte(u8)`               |
-| `char`       | `u16`                     | `.char()`                          | `Char(u16)`              |
-| `short`      | `i16`                     | `.short()`                         | `Short(i16)`             |
-| `int`        | `i32`                     | `.int()`                           | `Int(i32)`               |
-| `long`       | `i64`                     | `.long()`                          | `Long(i64)`              |
-| `float`      | `f32`                     | `.float()`                         | `Float(f32)`             |
-| `double`     | `f64`                     | `.double()`                        | `Double(f64)`            |
-| `String`     | `String` or `&str`        | `.string()`                        | `String(&str)`           |
-| `Foo`        | `Foo: JavaObject`         | `.object("Lcom/example/Foo;")`     | `Object(Class, &dyn ..)` |
-| `int[]` etc. | `Vec<i32>` or `&[i32]`    | `.int_array()`, …                  | `IntArray(&[i32])`, …    |
-| `Foo[]`      | `Vec<Foo>`                | `.array(Foo::class().signature())` | `Array(Class, Vec<..>)`  |
-| `null`       | `Option<T>`, written `None` | —                                | `Null`                   |
+| Java         | Rust field type (derive)    | Schema (`Field::builder(name)`)    | Value (inside `write_object`)      |
+| ------------ | --------------------------- | ---------------------------------- | ---------------------------------- |
+| `boolean`    | `bool`                      | `.boolean()`                       | `w.write_bool(v)`                  |
+| `byte`       | `u8` or `i8`                | `.byte()`                          | `w.write_byte(v)`                  |
+| `char`       | `u16`                       | `.char()`                          | `w.write_char(v)`                  |
+| `short`      | `i16`                       | `.short()`                         | `w.write_short(v)`                 |
+| `int`        | `i32`                       | `.int()`                           | `w.write_int(v)`                   |
+| `long`       | `i64`                       | `.long()`                          | `w.write_long(v)`                  |
+| `float`      | `f32`                       | `.float()`                         | `w.write_float(v)`                 |
+| `double`     | `f64`                       | `.double()`                        | `w.write_double(v)`                |
+| `String`     | `String` or `&str`          | `.string()`                        | `w.write_string(s)`                |
+| `Foo`        | `Foo: JavaObject`           | `.object("Lcom/example/Foo;")`     | `foo.write_to(w)`                  |
+| `int[]` etc. | `Vec<i32>` or `&[i32]`      | `.int_array()`, …                  | `w.write_int_array(&v)`, …         |
+| `Foo[]`      | `Vec<Foo>`                  | `.array(Foo::class().signature())` | `w.begin_array(&cls, len)` + `write_to` per element |
+| `null`       | `Option<T>`, written `None` | —                                  | `w.write_null()`                   |
+
+Every primitive row also works as `v.write_to(w)` — `JavaWriteable` is implemented for the Rust primitives and
+`String`/`str` too, so a hand-written `write_object` can be uniformly `self.field.write_to(w)?`.
+
+For an object array, `cls` is the array's own class descriptor: `Class::class_of_object_array(&Foo::class())` derives
+it, including the serialVersionUID the JVM computes for `Foo[]` — no magic number to look up.
 
 Nested objects, object arrays, and `null` references all work. Strings are written as Java **modified UTF-8**, and
 repeated strings and class descriptors are emitted as `TC_REFERENCE` back-references, matching what the JVM does.
@@ -303,10 +331,11 @@ Pre-built descriptions of common JDK types live in `serde_java::ext` (currently 
 - **No deserialization.** Write-only; there is no reader for Java streams.
 - **No object-identity dedup.** Handles are allocated per object but never reused, so one Rust value referenced twice
   serializes as two distinct Java objects rather than a back-reference. Cyclic graphs are not supported.
-- **`FieldValue::BoolArray`, `CharArray`, and `StringArray` are unimplemented** and will panic (`todo!()`). Other
-  primitive arrays and object arrays work.
-- **Custom `writeObject` (`ClassFlags::WRITE_METHOD`) is barely exercised** — the hook exists on `JavaSerializable`,
-  but no type in the tree uses it and the block-data framing around it is incomplete.
+- **No `char[]` or `String[]` writer.** `JavaWriter` covers `boolean[]`, `byte[]`, `short[]`, `int[]`, `long[]`,
+  `float[]`, `double[]` and object arrays; `char[]` and `String[]` have none yet, which is why the derive rejects
+  `Vec<u16>` and `Vec<String>` fields (it rejects `Vec<bool>` too, though `write_boolean_array` does exist).
+- **Custom `writeObject` (`ClassFlags::WRITE_METHOD`) is not honoured** — no type in the tree sets the flag, and the
+  block-data framing that would go with it is commented out in `Object::write_to`.
 - **`ext::Throwable` is partial** — it writes `detailMessage` and `cause`, but not `stackTrace` or
   `suppressedExceptions` (its round-trip test is `#[ignore]`d for that reason). `StackTraceElement` is complete.
 - **`suid` is not exported.** `compute_default_suid` and friends live behind a private `mod suid;`, so they are only

@@ -105,12 +105,10 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
 
     // Mirror `Field::cmp`: primitives first, then alphabetically by Java name.
     // `sort_by` is stable, so equal keys keep declaration order.
-    resolved.sort_by(|a, b| {
-        (!a.is_primitive, &a.java_name).cmp(&(!b.is_primitive, &b.java_name))
-    });
+    resolved.sort_by(|a, b| (!a.is_primitive, &a.java_name).cmp(&(!b.is_primitive, &b.java_name)));
 
     let mut field_calls: Vec<TokenStream> = Vec::new();
-    let mut value_exprs: Vec<TokenStream> = Vec::new();
+    let mut write_stmts: Vec<TokenStream> = Vec::new();
     let mut array_statics: Vec<TokenStream> = Vec::new();
 
     for (idx, r) in resolved.iter().enumerate() {
@@ -132,7 +130,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             let id = Ident::new(&format!("__ARRAY_CLASS_{idx}"), Span::call_site());
             array_statics.push(quote!(
                 static #id: Lazy<::serde_java::Class> = Lazy::new(|| {
-                    ::serde_java::Class::class_of_object_array(
+                    ::serde_java::Class::class_of_array(
                         &<#elem as ::serde_java::JavaObject>::class(),
                     )
                 });
@@ -140,8 +138,15 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             id
         });
 
-        value_exprs.push(r.ty.value_expr(&r.access, array_class.as_ref()));
+        write_stmts.push(r.ty.write_stmts(&r.access, array_class.as_ref()));
     }
+
+    // A struct whose fields are all `skip`ped writes nothing, which would leave `w` unused.
+    let w = if write_stmts.is_empty() {
+        Ident::new("_w", Span::call_site())
+    } else {
+        Ident::new("w", Span::call_site())
+    };
 
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -167,8 +172,12 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             }
 
             impl #impl_generics ::serde_java::JavaSerializable for #ident #ty_generics #where_clause {
-                fn fields(&self) -> ::std::vec::Vec<::serde_java::FieldValue<'_>> {
-                    ::std::vec![ #(#value_exprs),* ]
+                fn write_object(
+                    &self,
+                    #w: &mut ::serde_java::JavaWriter<&mut dyn ::std::io::Write>,
+                ) -> ::std::io::Result<()> {
+                    #(#write_stmts)*
+                    ::std::result::Result::Ok(())
                 }
             }
         };

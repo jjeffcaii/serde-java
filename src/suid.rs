@@ -29,11 +29,11 @@ pub struct ClassMetadata<'a> {
     pub class_name: &'a str, // fully-qualified name, e.g. "com.example.ExtInfo"
     pub class_modifiers: i32,
     pub is_interface: bool,
-    pub interfaces: Vec<&'a str>,         // fully-qualified names of directly implemented interfaces
-    pub fields: Vec<FieldSig<'a>>,        // every declared field (static/transient included; filtered inside)
-    pub has_static_initializer: bool,     // whether a <clinit> exists (static block, or static field initializer)
+    pub interfaces: Vec<&'a str>, // fully-qualified names of directly implemented interfaces
+    pub fields: Vec<FieldSig<'a>>, // every declared field (static/transient included; filtered inside)
+    pub has_static_initializer: bool, // whether a <clinit> exists (static block, or static field initializer)
     pub constructors: Vec<MethodSig<'a>>, // name is always "<init>"; descriptor is required
-    pub methods: Vec<MethodSig<'a>>,      // constructors excluded
+    pub methods: Vec<MethodSig<'a>>,  // constructors excluded
 }
 
 use sha1::{Digest, Sha1};

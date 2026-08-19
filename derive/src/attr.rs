@@ -12,10 +12,7 @@ pub struct FieldAttr {
     pub signature: Option<String>,
 }
 
-pub fn parse_container(
-    attrs: &[Attribute],
-    span: proc_macro2::Span,
-) -> syn::Result<ContainerAttr> {
+pub fn parse_container(attrs: &[Attribute], span: proc_macro2::Span) -> syn::Result<ContainerAttr> {
     let mut class: Option<String> = None;
     let mut suid: Option<i64> = None;
 
@@ -113,17 +110,11 @@ fn parse_i64(expr: &Expr) -> syn::Result<i64> {
                 lit: Lit::Int(i), ..
             }) => (true, i),
             other => {
-                return Err(syn::Error::new(
-                    other.span(),
-                    "expected an integer literal",
-                ));
+                return Err(syn::Error::new(other.span(), "expected an integer literal"));
             }
         },
         other => {
-            return Err(syn::Error::new(
-                other.span(),
-                "expected an integer literal",
-            ));
+            return Err(syn::Error::new(other.span(), "expected an integer literal"));
         }
     };
 

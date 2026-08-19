@@ -1,6 +1,8 @@
+use crate::JavaWriter;
 use crate::misc::to_signature;
-use crate::proto::{Class, Field, FieldValue, JavaObject, JavaSerializable};
+use crate::proto::{Class, Field, JavaObject, JavaSerializable, JavaWriteable};
 use once_cell::sync::Lazy;
+use std::io::Write;
 use std::sync::Arc;
 
 static CLASS_OF_STACK_TRACE_ELEMENT: Lazy<Class> = Lazy::new(|| {
@@ -99,27 +101,32 @@ impl JavaObject for StackTraceElement {
 }
 
 impl JavaSerializable for StackTraceElement {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::from(self.format),
-            FieldValue::from(self.line_number),
-            match &self.class_loader_name {
-                Some(class_loader_name) => FieldValue::from(class_loader_name),
-                None => FieldValue::Null,
-            },
-            FieldValue::from(&self.declaring_class),
-            FieldValue::from(&self.file_name),
-            FieldValue::from(&self.method_name),
-            match &self.module_name {
-                Some(module_name) => FieldValue::from(module_name),
-                None => FieldValue::Null,
-            },
-            match &self.module_version {
-                Some(module_version) => FieldValue::from(module_version),
-                None => FieldValue::Null,
-            },
-        ]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> std::io::Result<()> {
+        // Same order as CLASS_OF_STACK_TRACE_ELEMENT: primitives first, then the strings.
+        w.write_byte(self.format)?;
+        w.write_int(self.line_number)?;
+        write_nullable_string(w, self.class_loader_name.as_deref())?;
+        w.write_string(&self.declaring_class)?;
+        w.write_string(&self.file_name)?;
+        w.write_string(&self.method_name)?;
+        write_nullable_string(w, self.module_name.as_deref())?;
+        write_nullable_string(w, self.module_version.as_deref())?;
+        Ok(())
     }
+}
+
+#[inline]
+fn write_nullable_string(
+    w: &mut JavaWriter<&mut dyn Write>,
+    s: Option<&str>,
+) -> std::io::Result<()> {
+    match s {
+        Some(s) => {
+            w.write_string(s)?;
+        }
+        None => w.write_null()?,
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -153,8 +160,13 @@ impl JavaObject for Throwable {
 }
 
 impl JavaSerializable for Throwable {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![FieldValue::from(&self.detail_message), FieldValue::Null]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> std::io::Result<()> {
+        w.write_string(&self.detail_message)?;
+        match &self.cause {
+            Some(cause) => cause.write_to(w)?,
+            None => w.write_null()?,
+        }
+        Ok(())
     }
 }
 
@@ -162,7 +174,7 @@ impl JavaSerializable for Throwable {
 mod tests {
     use super::*;
 
-    use crate::proto::JavaSerializableExt;
+    use crate::proto::JavaWriteable;
     use std::io;
 
     fn init() {

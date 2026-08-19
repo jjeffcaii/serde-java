@@ -1,4 +1,3 @@
-use super::JavaSerializable;
 use crate::astr::AtomString;
 use crate::misc::to_signature;
 use crate::suid::{self, ClassMetadata};
@@ -268,90 +267,6 @@ impl Field {
     }
 }
 
-pub enum FieldValue<'a> {
-    Null,
-    Byte(u8),
-    Bool(bool),
-    Char(u16),
-    Short(i16),
-    Int(i32),
-    Long(i64),
-    Float(f32),
-    Double(f64),
-    String(&'a str),
-    BoolArray(&'a [bool]),
-    CharArray(&'a [u16]),
-    ByteArray(&'a [u8]),
-    ShortArray(&'a [i16]),
-    IntArray(&'a [i32]),
-    LongArray(&'a [i64]),
-    FloatArray(&'a [f32]),
-    DoubleArray(&'a [f64]),
-    StringArray(&'a [&'a str]),
-    Object(Class, &'a dyn JavaSerializable),
-    Array(Class, Vec<(Class, &'a dyn JavaSerializable)>),
-}
-
-impl<'a> From<u8> for FieldValue<'a> {
-    fn from(value: u8) -> Self {
-        Self::Byte(value)
-    }
-}
-
-impl<'a> From<bool> for FieldValue<'a> {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
-    }
-}
-
-impl<'a> From<i16> for FieldValue<'a> {
-    fn from(value: i16) -> Self {
-        Self::Short(value)
-    }
-}
-
-impl<'a> From<i32> for FieldValue<'a> {
-    fn from(value: i32) -> Self {
-        Self::Int(value)
-    }
-}
-
-impl<'a> From<i64> for FieldValue<'a> {
-    fn from(value: i64) -> Self {
-        Self::Long(value)
-    }
-}
-
-impl<'a> From<f32> for FieldValue<'a> {
-    fn from(value: f32) -> Self {
-        Self::Float(value)
-    }
-}
-
-impl<'a> From<f64> for FieldValue<'a> {
-    fn from(value: f64) -> Self {
-        Self::Double(value)
-    }
-}
-
-impl<'a> From<&'a str> for FieldValue<'a> {
-    fn from(value: &'a str) -> Self {
-        Self::String(value)
-    }
-}
-
-impl<'a> From<&'a String> for FieldValue<'a> {
-    fn from(value: &'a String) -> Self {
-        Self::String(&*value)
-    }
-}
-
-impl<'a> From<&'a [u8]> for FieldValue<'a> {
-    fn from(value: &'a [u8]) -> Self {
-        Self::ByteArray(value)
-    }
-}
-
 pub struct ClassBuilder<'a> {
     name: &'a str,
     signature: Option<&'a str>,
@@ -376,7 +291,8 @@ pub struct Class {
 }
 
 impl Class {
-    pub fn class_of_array(item_class: Class, serial_version_uid: i64) -> Class {
+    #[inline]
+    fn class_of_array_(item_class: Class, serial_version_uid: i64) -> Class {
         let array_class_name = format!("[L{};", item_class.name());
         let array_class_sig = format!("[{}", item_class.signature());
         Class::builder(&array_class_name, serial_version_uid)
@@ -390,7 +306,7 @@ impl Class {
     /// `ObjectStreamClass.computeDefaultSUID` over a synthetic descriptor: the array class
     /// name, modifiers `public final abstract`, and no interfaces, fields, constructors or
     /// methods. Verified against every hard-coded array SUID in this file.
-    pub fn class_of_object_array(item_class: &Class) -> Class {
+    pub fn class_of_array(item_class: &Class) -> Class {
         let array_class_name = format!("[L{};", item_class.name());
         let meta = ClassMetadata {
             class_name: &array_class_name,
@@ -403,7 +319,7 @@ impl Class {
             methods: vec![],
         };
         let serial_version_uid = suid::compute_default_suid(&meta);
-        Class::class_of_array(Clone::clone(item_class), serial_version_uid)
+        Class::class_of_array_(Clone::clone(item_class), serial_version_uid)
     }
 
     pub fn class_of_boolean_array() -> Class {
@@ -640,7 +556,7 @@ mod tests {
         // com.example.Address's own SUID comes from examples/example.rs and is irrelevant here:
         // an array class's SUID depends only on the element class's name.
         let item = Class::builder("com.example.Address", -4433675896693646393).build();
-        let arr = Class::class_of_object_array(&item);
+        let arr = Class::class_of_array(&item);
 
         info!("{} => {}", arr.name(), arr.serial_version_uid());
 
@@ -656,7 +572,7 @@ mod tests {
 
         // Cross-check against the hard-coded SUID in this file's class_of_string_array()
         let item = Class::builder("java.lang.String", 0).build();
-        let arr = Class::class_of_object_array(&item);
+        let arr = Class::class_of_array(&item);
 
         assert_eq!(
             Class::class_of_string_array().serial_version_uid(),

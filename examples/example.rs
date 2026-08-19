@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use serde_java::*;
+use std::io;
 
 #[derive(Debug)]
 struct User {
@@ -53,12 +54,11 @@ impl JavaObject for ExtInfo {
 }
 
 impl JavaSerializable for ExtInfo {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::from(self.id),
-            FieldValue::from(&self.key),
-            FieldValue::from(&self.value),
-        ]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.id.write_to(w)?;
+        self.key.write_to(w)?;
+        self.value.write_to(w)?;
+        Ok(())
     }
 }
 
@@ -91,12 +91,11 @@ impl JavaObject for Address {
 }
 
 impl JavaSerializable for Address {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::String(&self.city),
-            FieldValue::String(&self.country),
-            FieldValue::String(&self.street),
-        ]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.city.write_to(w)?;
+        self.country.write_to(w)?;
+        self.street.write_to(w)?;
+        Ok(())
     }
 }
 
@@ -118,21 +117,23 @@ impl JavaObject for User {
 }
 
 impl JavaSerializable for User {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::from(self.age),
-            FieldValue::from(self.id),
-            FieldValue::Array(
-                Class::class_of_array(Address::class(), 7549007861314292831),
-                self.addresses
-                    .iter()
-                    .map(|a| (Address::class(), a as &dyn JavaSerializable))
-                    .collect(),
-            ),
-            FieldValue::Object(ExtInfo::class(), &self.ext1),
-            FieldValue::Object(ExtInfo::class(), &self.ext2),
-            FieldValue::from(&self.name),
-        ]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.age.write_to(w)?;
+        self.id.write_to(w)?;
+
+        static CLASS_ADDRESS_ARRAY: Lazy<Class> =
+            Lazy::new(|| Class::class_of_array(&Address::class()));
+
+        w.begin_array(&CLASS_ADDRESS_ARRAY, self.addresses.len())?;
+        for next in &self.addresses {
+            next.write_to(w)?;
+        }
+
+        self.ext1.write_to(w)?;
+        self.ext2.write_to(w)?;
+        self.name.write_to(w)?;
+
+        Ok(())
     }
 }
 
@@ -149,7 +150,25 @@ fn main() -> anyhow::Result<()> {
         ext2: ExtInfo::new(888, "k888", "v888"),
     };
 
-    println!("{:?}: {}", &user, hex::encode(&user.to_bytes()?));
+    let b = user.to_bytes()?;
+
+    // let obj = Object::<User, ()>::builder(User::class())
+    //     .instance(&user)
+    //     .build();
+    //
+    // let b = {
+    //     let mut buf = Vec::<u8>::new();
+    //     let mut jw = JavaWriter::new(&mut buf)?;
+    //     obj.write_to(&mut jw)?;
+    //     buf
+    // };
+
+    println!("{:?}: {}", &user, hex::encode(&b));
+
+    assert_eq!(
+        "aced000573720010636f6d2e6578616d706c652e5573657244c89e33565b94790200064900036167654a000269645b00096164647265737365737400165b4c636f6d2f6578616d706c652f416464726573733b4c0004657874317400154c636f6d2f6578616d706c652f457874496e666f3b4c00046578743271007e00024c00046e616d657400124c6a6176612f6c616e672f537472696e673b787000000012000000000000007b757200165b4c636f6d2e6578616d706c652e416464726573733b68c376a74c450c5f02000078700000000273720013636f6d2e6578616d706c652e41646472657373c2786b43385d1bc70200034c00046369747971007e00034c0007636f756e74727971007e00034c000673747265657471007e000378707400085368616e676861697400054368696e6174000b446f6e6766616e672052647371007e00077400074265696a696e6771007e000a74000a4368616e67616e20526473720013636f6d2e6578616d706c652e457874496e666f764096c33128fc7002000349000269644c00036b657971007e00034c000576616c756571007e00037870000003097400046b373737740004763737377371007e000f000003787400046b383838740004763838387400044a61636b",
+        hex::encode(&b),
+    );
 
     Ok(())
 }

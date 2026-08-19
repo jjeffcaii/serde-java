@@ -1,80 +1,18 @@
 mod class;
+mod object;
+mod serializable;
 mod writer;
 
-pub use class::*;
-use std::fs::File;
-use std::io;
-use std::path::Path;
-pub use writer::*;
-
-pub trait JavaObject {
-    fn class() -> Class;
-}
-
-pub trait JavaSerializable {
-    fn fields(&self) -> Vec<FieldValue<'_>>;
-
-    fn write_object<W: io::Write>(&self, w: &mut JavaWriter<W>) -> io::Result<()>
-    where
-        Self: Sized,
-    {
-        Ok(())
-    }
-}
-
-pub fn write_to<W, O>(w: &mut JavaWriter<W>, obj: &O) -> io::Result<()>
-where
-    W: io::Write,
-    O: JavaSerializable + JavaObject,
-{
-    let class = O::class();
-    if class.flags().contains(ClassFlags::WRITE_METHOD) {
-        w.write_object(&class, &[])?;
-        // w.custom_block_begin()?;
-        obj.write_object(w)?;
-        w.end_block_data()?;
-        // w.custom_block_end()?;
-    } else {
-        w.write_object(&class, &obj.fields())?;
-    }
-
-    Ok(())
-}
-
-/// JavaSerializableExt extends more features.
-pub trait JavaSerializableExt {
-    /// serialize object to bytes.
-    fn to_bytes(&self) -> io::Result<Vec<u8>>;
-
-    /// Serialize object then write to file.
-    fn to_file<P>(&self, path: P) -> io::Result<()>
-    where
-        P: AsRef<Path>;
-}
-
-impl<T: JavaSerializable + JavaObject> JavaSerializableExt for T {
-    fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        let mut b = Vec::<u8>::new();
-        let mut w = JavaWriter::new(&mut b)?;
-        write_to(&mut w, self)?;
-        Ok(b)
-    }
-
-    fn to_file<P>(&self, path: P) -> io::Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let mut f = File::create(path)?;
-        let mut w = JavaWriter::new(&mut f)?;
-        write_to(&mut w, self)?;
-        Ok(())
-    }
-}
+pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind};
+pub use object::{Object, ObjectBuilder};
+pub use serializable::{JavaObject, JavaSerializable, JavaWriteable};
+pub use writer::JavaWriter;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use crate::proto::object::Object;
     use once_cell::sync::Lazy;
     use std::io;
 
@@ -101,8 +39,10 @@ mod tests {
     }
 
     impl JavaSerializable for Demo {
-        fn fields(&self) -> Vec<FieldValue<'_>> {
-            vec![FieldValue::Int(self.i), FieldValue::String(&self.message)]
+        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+            w.write_int(self.i)?;
+            w.write_string(&self.message)?;
+            Ok(())
         }
     }
 
@@ -123,8 +63,9 @@ mod tests {
     }
 
     impl JavaSerializable for Address {
-        fn fields(&self) -> Vec<FieldValue<'_>> {
-            vec![FieldValue::String(&self.city)]
+        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+            w.write_string(&self.city)?;
+            Ok(())
         }
     }
 
@@ -147,11 +88,14 @@ mod tests {
     }
 
     impl JavaSerializable for Order {
-        fn fields(&self) -> Vec<FieldValue<'_>> {
-            vec![
-                FieldValue::Int(self.id),
-                FieldValue::Object(Address::class(), &self.address),
-            ]
+        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+            w.write_int(self.id)?;
+
+            let obj = Object::<Address, ()>::builder(Address::class())
+                .this(&self.address)
+                .build();
+            obj.write_to(w)?;
+            Ok(())
         }
     }
 
@@ -188,7 +132,11 @@ mod tests {
             message: "helloWorld".to_string(),
         };
 
-        write_to(&mut w, &demo)?;
+        let obj = Object::<Demo, ()>::builder(Demo::class())
+            .this(&demo)
+            .build();
+
+        obj.write_to(&mut w)?;
 
         info!("java serialize: {}", hex::encode(&b));
 
@@ -214,7 +162,11 @@ mod tests {
             },
         };
 
-        write_to(&mut w, &order)?;
+        let obj = Object::<Order, ()>::builder(Order::class())
+            .this(&order)
+            .build();
+
+        obj.write_to(&mut w)?;
 
         info!("java serialize nested: {}", hex::encode(&b));
 
@@ -225,8 +177,4 @@ mod tests {
 
         Ok(())
     }
-
-    // Writing into an in-memory buffer:
-    // let mut buf = Vec::new();
-    // let mut w = JavaWriter::new(&mut buf)?;
 }

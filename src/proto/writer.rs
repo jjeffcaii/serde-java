@@ -1,4 +1,4 @@
-use super::{Class, FieldKind, FieldValue};
+use super::{Class, FieldKind};
 use crate::astr::AtomString;
 use crate::misc::to_modified_utf8;
 use byteorder::{BigEndian, WriteBytesExt};
@@ -30,7 +30,7 @@ const TC_NULLREF: u8 = 0x70; // alias
 
 const BASE_WIRE_HANDLE: u32 = 0x7e0000;
 
-pub struct JavaWriter<W: io::Write> {
+pub struct JavaWriter<W> {
     w: W,
     next_handle: u32,
     string_handles: HashMap<String, u32>,
@@ -105,6 +105,32 @@ impl<W: io::Write> JavaWriter<W> {
             string_handles: Default::default(),
             class_handles: Default::default(),
         })
+    }
+
+    /// Runs `f` with a type-erased view of this writer, then takes the mutated stream state back.
+    ///
+    /// `JavaWriter<W>` is generic over `W`, so methods taking it cannot be called through a
+    /// `dyn` trait object. This hands out a `JavaWriter<&mut dyn io::Write>` borrowing the same
+    /// underlying sink, so handle allocation and the string/class back-reference tables keep
+    /// advancing across the call.
+    pub fn with_dyn<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut JavaWriter<&mut dyn io::Write>) -> R,
+    {
+        let mut erased = JavaWriter {
+            next_handle: self.next_handle,
+            string_handles: std::mem::take(&mut self.string_handles),
+            class_handles: std::mem::take(&mut self.class_handles),
+            w: &mut self.w as &mut dyn io::Write,
+        };
+
+        let r = f(&mut erased);
+
+        self.next_handle = erased.next_handle;
+        self.string_handles = std::mem::take(&mut erased.string_handles);
+        self.class_handles = std::mem::take(&mut erased.class_handles);
+
+        r
     }
 
     #[inline]
@@ -241,6 +267,15 @@ impl<W: io::Write> JavaWriter<W> {
         self.write_primitive_array(&class, data, |w, it| w.write_double(*it))
     }
 
+    pub fn begin_array(&mut self, class: &Class, size: usize) -> io::Result<u32> {
+        self.put_u8(TC_ARRAY)?;
+        self.write_class(class)?;
+        let handle = self.alloc_handle();
+        self.put_u32(size as u32)?;
+
+        Ok(handle)
+    }
+
     #[inline]
     fn write_primitive_array<T>(
         &mut self,
@@ -321,72 +356,74 @@ impl<W: io::Write> JavaWriter<W> {
 
 impl<W: io::Write> JavaWriter<W> {
     #[inline]
-    pub fn write_object(&mut self, cd: &Class, values: &[FieldValue<'_>]) -> io::Result<u32> {
+    pub fn begin_object(&mut self, class: &Class) -> io::Result<u32> {
         self.put_u8(TC_OBJECT)?;
 
-        self.write_class(cd)?;
+        self.write_class(class)?;
 
         let h = self.alloc_handle();
 
-        for v in values {
-            match v {
-                FieldValue::Byte(x) => self.write_byte(*x)?,
-                FieldValue::Bool(x) => self.write_bool(*x)?,
-                FieldValue::Char(x) => self.write_char(*x)?,
-                FieldValue::Short(x) => self.write_short(*x)?,
-                FieldValue::Int(x) => self.write_int(*x)?,
-                FieldValue::Long(x) => self.write_long(*x)?,
-                FieldValue::Float(x) => self.write_float(*x)?,
-                FieldValue::Double(x) => self.write_double(*x)?,
-                FieldValue::String(s) => {
-                    self.write_string(s)?;
-                }
-                FieldValue::Object(class, obj) => {
-                    self.write_object(class, &obj.fields())?;
-                }
-                FieldValue::Null => self.write_null()?,
-                FieldValue::BoolArray(_) => {
-                    todo!("write boolean array!")
-                }
-                FieldValue::CharArray(_) => {
-                    todo!("write character array!")
-                }
-                FieldValue::ByteArray(x) => {
-                    self.write_byte_array(*x)?;
-                }
-                FieldValue::ShortArray(x) => {
-                    self.write_short_array(*x)?;
-                }
-                FieldValue::IntArray(x) => {
-                    self.write_int_array(*x)?;
-                }
-                FieldValue::LongArray(x) => {
-                    self.write_long_array(*x)?;
-                }
-                FieldValue::FloatArray(x) => {
-                    self.write_float_array(*x)?;
-                }
-                FieldValue::DoubleArray(x) => {
-                    self.write_double_array(*x)?;
-                }
-                FieldValue::StringArray(x) => {
-                    todo!("write string array!")
-                }
-                FieldValue::Array(class_of_array, x) => {
-                    info!(
-                        "begin write array: class={}, len={}",
-                        class_of_array.signature(),
-                        x.len()
-                    );
-
-                    self.write_primitive_array(class_of_array, x, |w, (class_of_item, it)| {
-                        let next_fields = it.fields();
-                        w.write_object(class_of_item, &next_fields)?;
-                        Ok(())
-                    })?;
-                }
-            }
-        }
+        // for v in values {
+        //     match v {
+        //         FieldValue::Byte(x) => self.write_byte(*x)?,
+        //         FieldValue::Bool(x) => self.write_bool(*x)?,
+        //         FieldValue::Char(x) => self.write_char(*x)?,
+        //         FieldValue::Short(x) => self.write_short(*x)?,
+        //         FieldValue::Int(x) => self.write_int(*x)?,
+        //         FieldValue::Long(x) => self.write_long(*x)?,
+        //         FieldValue::Float(x) => self.write_float(*x)?,
+        //         FieldValue::Double(x) => self.write_double(*x)?,
+        //         FieldValue::String(s) => {
+        //             self.write_string(s)?;
+        //         }
+        //         FieldValue::Object(class, obj) => {
+        //             // self.write_object(class, &obj.fields())?;
+        //             unreachable!()
+        //         }
+        //         FieldValue::Null => self.write_null()?,
+        //         FieldValue::BoolArray(_) => {
+        //             todo!("write boolean array!")
+        //         }
+        //         FieldValue::CharArray(_) => {
+        //             todo!("write character array!")
+        //         }
+        //         FieldValue::ByteArray(x) => {
+        //             self.write_byte_array(*x)?;
+        //         }
+        //         FieldValue::ShortArray(x) => {
+        //             self.write_short_array(*x)?;
+        //         }
+        //         FieldValue::IntArray(x) => {
+        //             self.write_int_array(*x)?;
+        //         }
+        //         FieldValue::LongArray(x) => {
+        //             self.write_long_array(*x)?;
+        //         }
+        //         FieldValue::FloatArray(x) => {
+        //             self.write_float_array(*x)?;
+        //         }
+        //         FieldValue::DoubleArray(x) => {
+        //             self.write_double_array(*x)?;
+        //         }
+        //         FieldValue::StringArray(x) => {
+        //             todo!("write string array!")
+        //         }
+        //         FieldValue::Array(class_of_array, x) => {
+        //             // info!(
+        //             //     "begin write array: class={}, len={}",
+        //             //     class_of_array.signature(),
+        //             //     x.len()
+        //             // );
+        //             //
+        //             // self.write_primitive_array(class_of_array, x, |w, (class_of_item, it)| {
+        //             //     let next_fields = it.fields();
+        //             //     w.write_object(class_of_item, &next_fields)?;
+        //             //     Ok(())
+        //             // })?;
+        //             unreachable!()
+        //         }
+        //     }
+        // }
         Ok(h)
     }
 

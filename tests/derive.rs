@@ -1,6 +1,7 @@
 #![cfg(feature = "derive")]
 
 use serde_java::*;
+use std::io;
 
 // ---- Reuses the real-ObjectOutputStream fixture from src/proto/mod.rs's tests ----
 
@@ -97,7 +98,18 @@ fn test_derive_all_scalar_types() {
         .collect();
 
     assert_eq!(
-        vec!["Z", "B", "B", "C", "S", "I", "J", "F", "D", "Ljava/lang/String;"],
+        vec![
+            "Z",
+            "B",
+            "B",
+            "C",
+            "S",
+            "I",
+            "J",
+            "F",
+            "D",
+            "Ljava/lang/String;"
+        ],
         sigs
     );
 
@@ -138,8 +150,12 @@ fn test_derive_rename() {
 #[test]
 fn test_derive_rename_affects_wire_field_name() {
     let r = Renamed {
-        zzz: Address { city: "NY".to_string() },
-        beta: Address { city: "LA".to_string() },
+        zzz: Address {
+            city: "NY".to_string(),
+        },
+        beta: Address {
+            city: "LA".to_string(),
+        },
     };
     let hex = hex::encode(r.to_bytes().unwrap());
     // "aaa" in modified UTF-8 is 616161, with the length prefix 0003
@@ -171,8 +187,9 @@ fn test_derive_skip() {
         ignored: Default::default(),
         also_ignored: 1.5,
     };
-    // fields() yields a single value too, matching class()
-    assert_eq!(1, s.fields().len());
+    // The value side skips them too: the stream ends with the single int 9
+    let hex = hex::encode(s.to_bytes().unwrap());
+    assert!(hex.ends_with("00000009"), "unexpected tail: {hex}");
 }
 
 // ---- signature ----
@@ -194,7 +211,11 @@ fn test_derive_signature_override() {
     // exactly what a Java field declared `Object[]` holding an `Address[]` looks like, but this
     // test only checks that `signature` lands in the descriptor verbatim.
     let class = Declared::class();
-    let sigs: Vec<String> = class.fields().iter().map(|f| f.kind().to_string()).collect();
+    let sigs: Vec<String> = class
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
     // Order: both are in the object group, sorted by Java name -> lookup, raw
     assert_eq!(vec!["Ljava/util/Map;", "[Ljava/lang/Object;"], sigs);
 }
@@ -314,8 +335,9 @@ impl JavaObject for HandAddress {
 }
 
 impl JavaSerializable for HandAddress {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![FieldValue::String(&self.city)]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_string(&self.city)?;
+        Ok(())
     }
 }
 
@@ -329,18 +351,19 @@ impl JavaObject for HandTeam {
 }
 
 impl JavaSerializable for HandTeam {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::Int(self.size),
-            FieldValue::Array(
-                // Same magic number that used to be hard-coded in examples/example.rs
-                Class::class_of_array(HandAddress::class(), 7549007861314292831),
-                self.members
-                    .iter()
-                    .map(|a| (HandAddress::class(), a as &dyn JavaSerializable))
-                    .collect(),
-            ),
-        ]
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_int(self.size)?;
+
+        // Same magic number that used to be hard-coded in examples/example.rs
+        w.begin_array(
+            &Class::class_of_array(&HandAddress::class()),
+            self.members.len(),
+        )?;
+        for m in &self.members {
+            m.write_to(w)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -349,15 +372,23 @@ fn test_derive_object_array_matches_handwritten() {
     let derived = DerivedTeam {
         size: 2,
         members: vec![
-            Address { city: "Shanghai".to_string() },
-            Address { city: "Beijing".to_string() },
+            Address {
+                city: "Shanghai".to_string(),
+            },
+            Address {
+                city: "Beijing".to_string(),
+            },
         ],
     };
     let hand = HandTeam {
         size: 2,
         members: vec![
-            HandAddress { city: "Shanghai".to_string() },
-            HandAddress { city: "Beijing".to_string() },
+            HandAddress {
+                city: "Shanghai".to_string(),
+            },
+            HandAddress {
+                city: "Beijing".to_string(),
+            },
         ],
     };
 

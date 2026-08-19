@@ -68,23 +68,41 @@ impl JavaObject for User {
 
 
 impl JavaSerializable for Address {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::String(&self.city),
-            FieldValue::String(&self.country),
-            FieldValue::String(&self.street),
-        ]
+    // WARNING: 废弃不再使用
+    // fn fields(&self) -> Vec<FieldValue<'_>> {
+    //     vec![
+    //         FieldValue::String(&self.city),
+    //         FieldValue::String(&self.country),
+    //         FieldValue::String(&self.street),
+    //     ]
+    // }
+
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.city.write_object(w)?;
+        self.country.write_object(w)?;
+        self.street.write_object(w)?;
+        Ok(())
     }
 }
 
 impl JavaSerializable for User {
-    fn fields(&self) -> Vec<FieldValue<'_>> {
-        vec![
-            FieldValue::from(self.id),
-            FieldValue::Object(Address::class(), &self.address),
-            FieldValue::from(&self.name),
-        ]
+
+    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.id.write_object(w)?;
+        // 借助
+        self.address.write_to(w)?;
+        self.name.write_object(w)?;
+        Ok(())
     }
+    
+    // WARNING: 废弃不再使用
+    // fn fields(&self) -> Vec<FieldValue<'_>> {
+    //     vec![
+    //         FieldValue::from(self.id),
+    //         FieldValue::Object(Address::class(), &self.address),
+    //         FieldValue::from(&self.name),
+    //     ]
+    // }
 }
 
 
