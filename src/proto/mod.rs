@@ -1,9 +1,11 @@
 mod class;
+mod extends;
 mod object;
 mod serializable;
 mod writer;
 
 pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind};
+pub use extends::{Extends, ExtendsLayout};
 pub use object::{Object, ObjectBuilder};
 pub use serializable::{JavaObject, JavaSerializable, JavaWriteable};
 pub use writer::JavaWriter;

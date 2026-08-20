@@ -86,9 +86,7 @@ impl<'a, I, P> Object<'a, I, P> {
 mod tests {
     use super::*;
     use crate::Field;
-    use std::fs::File;
     use std::io;
-    use std::path::Path;
 
     struct PojoA {
         id: i32,
@@ -140,8 +138,6 @@ mod tests {
             .extends(&b)
             .build();
 
-        // to_file(&obj, "/Users/jeffsky/Desktop/rust.dat")?;
-
         let mut raw: Vec<u8> = vec![];
 
         {
@@ -156,19 +152,6 @@ mod tests {
             "aced000573720011636f6d2e6578616d706c652e506f6a6f41c31c011822e7434d020001490002696478720011636f6d2e6578616d706c652e506f6a6f4204533f61fab5f3060200014c00046e616d657400124c6a6176612f6c616e672f537472696e673b787074000a68656c6c6f776f726c64000000ff",
             hex::encode(&raw),
         );
-
-        Ok(())
-    }
-
-    fn to_file<I, S, P>(obj: &Object<I, S>, path: P) -> io::Result<()>
-    where
-        I: JavaSerializable,
-        S: JavaSerializable,
-        P: AsRef<Path>,
-    {
-        let mut f = File::create(path)?;
-        let mut w = JavaWriter::new(&mut f)?;
-        obj.write_to(&mut w)?;
 
         Ok(())
     }
