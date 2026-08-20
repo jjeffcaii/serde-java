@@ -13,8 +13,10 @@ mod tests {
     use super::*;
 
     use crate::proto::object::Object;
+    use anyhow::Result;
     use once_cell::sync::Lazy;
     use std::io;
+    use std::io::Write;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -100,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string() -> io::Result<()> {
+    fn test_string() -> Result<()> {
         init();
 
         let mut b: Vec<u8> = vec![];
@@ -121,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize() -> io::Result<()> {
+    fn test_serialize() -> Result<()> {
         init();
 
         let mut b: Vec<u8> = vec![];
@@ -174,6 +176,51 @@ mod tests {
             "aced000573720011636f6d2e6578616d706c652e4f72646572267b25a101681cb402000249000269644c0007616464726573737400154c636f6d2f6578616d706c652f416464726573733b78700000000773720013636f6d2e6578616d706c652e41646472657373c2786b43385d1bc70200014c0004636974797400124c6a6176612f6c616e672f537472696e673b78707400024e59",
             hex::encode(&b)
         );
+
+        Ok(())
+    }
+
+    struct CustomPojo {
+        username: String,
+        password: String,
+    }
+
+    impl JavaObject for CustomPojo {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                    .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
+                    .field(Field::builder("username").string())
+                    .build()
+            });
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for CustomPojo {
+        fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> io::Result<()> {
+            self.username.write_to(w)?;
+            let enc_password = format!("ENCRYPT_{}", &self.password);
+            enc_password.write_to(w)?;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_custom_pojo() -> Result<()> {
+        init();
+
+        let cp = CustomPojo {
+            username: "fake_username".to_string(),
+            password: "fake_password".to_string(),
+        };
+
+        let b = cp.to_bytes()?;
+
+        let actual = hex::encode(&b);
+        let expect = "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65740015454e43525950545f66616b655f70617373776f726478";
+
+        assert_eq!(expect, &actual);
 
         Ok(())
     }

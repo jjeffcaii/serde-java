@@ -120,15 +120,7 @@ impl JavaSerializable for User {
     fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
         self.age.write_to(w)?;
         self.id.write_to(w)?;
-
-        static CLASS_ADDRESS_ARRAY: Lazy<Class> =
-            Lazy::new(|| Class::class_of_array(&Address::class()));
-
-        w.begin_array(&CLASS_ADDRESS_ARRAY, self.addresses.len())?;
-        for next in &self.addresses {
-            next.write_to(w)?;
-        }
-
+        self.addresses.write_to(w)?;
         self.ext1.write_to(w)?;
         self.ext2.write_to(w)?;
         self.name.write_to(w)?;
@@ -151,17 +143,6 @@ fn main() -> anyhow::Result<()> {
     };
 
     let b = user.to_bytes()?;
-
-    // let obj = Object::<User, ()>::builder(User::class())
-    //     .instance(&user)
-    //     .build();
-    //
-    // let b = {
-    //     let mut buf = Vec::<u8>::new();
-    //     let mut jw = JavaWriter::new(&mut buf)?;
-    //     obj.write_to(&mut jw)?;
-    //     buf
-    // };
 
     println!("{:?}: {}", &user, hex::encode(&b));
 

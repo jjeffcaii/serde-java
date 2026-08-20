@@ -1,4 +1,5 @@
 use super::{Class, JavaSerializable, JavaWriter};
+use crate::ClassFlags;
 use std::io;
 
 impl JavaSerializable for () {
@@ -73,16 +74,9 @@ impl<'a, I, P> Object<'a, I, P> {
             w.with_dyn(|w| i.write_object(w))?;
         }
 
-        // self.class.flags().contains()
-        // if class.flags().contains(ClassFlags::WRITE_METHOD) {
-        //     w.write_object(&class, &[])?;
-        //     // w.custom_block_begin()?;
-        //     obj.write_object(w)?;
-        //     w.end_block_data()?;
-        //     // w.custom_block_end()?;
-        // } else {
-        //     w.write_object(&class, &obj.fields())?;
-        // }
+        if self.class.flags().contains(ClassFlags::WRITE_METHOD) {
+            w.end_block_data()?;
+        }
 
         Ok(())
     }
