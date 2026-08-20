@@ -335,7 +335,7 @@ impl JavaObject for HandAddress {
 }
 
 impl JavaSerializable for HandAddress {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         w.write_string(&self.city)?;
         Ok(())
     }
@@ -351,7 +351,7 @@ impl JavaObject for HandTeam {
 }
 
 impl JavaSerializable for HandTeam {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         w.write_int(self.size)?;
 
         // Same magic number that used to be hard-coded in examples/example.rs

@@ -174,7 +174,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             impl #impl_generics ::serde_java::JavaSerializable for #ident #ty_generics #where_clause {
                 fn write_object(
                     &self,
-                    #w: &mut ::serde_java::JavaWriter<&mut dyn ::std::io::Write>,
+                    #w: &mut ::serde_java::ObjectWriter<&mut dyn ::std::io::Write>,
                 ) -> ::std::io::Result<()> {
                     #(#write_stmts)*
                     ::std::result::Result::Ok(())

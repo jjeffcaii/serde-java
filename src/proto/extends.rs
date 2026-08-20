@@ -1,6 +1,6 @@
 use super::object::Object;
 use super::serializable::{JavaObject, JavaSerializable, JavaWriteable};
-use super::writer::JavaWriter;
+use super::writer::ObjectWriter;
 use std::io;
 
 pub trait Extends<P: Sized>: Sized {
@@ -47,7 +47,7 @@ where
     T: JavaSerializable + JavaObject,
     P: JavaSerializable + JavaObject,
 {
-    fn write_to(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         let t_class = T::class();
         let obj = Object::<T, P>::builder(t_class)
             .this(&self.this)
@@ -84,7 +84,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoA {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.id)?;
             Ok(())
         }
@@ -107,7 +107,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoB {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_string(&self.name)?;
             Ok(())
         }

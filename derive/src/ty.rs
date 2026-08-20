@@ -5,7 +5,7 @@ use syn::{GenericArgument, PathArguments, Type, TypePath};
 
 /// The Java type a Rust field maps to.
 pub enum JavaTy {
-    /// A JVM primitive: (`FieldBuilder` method, `JavaWriter` method, optional `as` cast).
+    /// A JVM primitive: (`FieldBuilder` method, `ObjectWriter` method, optional `as` cast).
     Prim(&'static str, &'static str, Option<&'static str>),
     /// `java.lang.String`.
     Str,
@@ -13,7 +13,7 @@ pub enum JavaTy {
     Object(Type),
     /// `Option<T>` where `T` is not a primitive.
     Nullable(Box<JavaTy>),
-    /// A JVM primitive array: (`FieldBuilder` method, `JavaWriter` method).
+    /// A JVM primitive array: (`FieldBuilder` method, `ObjectWriter` method).
     PrimArray(&'static str, &'static str),
     /// `Vec<T>` / `&[T]` where `T` maps to `Object`; carries the element type.
     ObjArray(Type),
@@ -230,7 +230,7 @@ fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
         "i8" => {
             return Err(syn::Error::new(
                 orig.span(),
-                "`i8` arrays are not supported because `JavaWriter::write_byte_array` needs \
+                "`i8` arrays are not supported because `ObjectWriter::write_byte_array` needs \
                  `&[u8]`; use `u8` instead",
             ));
         }

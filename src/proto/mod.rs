@@ -8,7 +8,7 @@ pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind}
 pub use extends::{Extends, ExtendsLayout};
 pub use object::{Object, ObjectBuilder};
 pub use serializable::{JavaObject, JavaSerializable, JavaWriteable};
-pub use writer::JavaWriter;
+pub use writer::ObjectWriter;
 
 #[cfg(test)]
 mod tests {
@@ -43,7 +43,7 @@ mod tests {
     }
 
     impl JavaSerializable for Demo {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.i)?;
             w.write_string(&self.message)?;
             Ok(())
@@ -67,7 +67,7 @@ mod tests {
     }
 
     impl JavaSerializable for Address {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_string(&self.city)?;
             Ok(())
         }
@@ -92,7 +92,7 @@ mod tests {
     }
 
     impl JavaSerializable for Order {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.id)?;
 
             let obj = Object::<Address, ()>::builder(Address::class())
@@ -108,7 +108,7 @@ mod tests {
         init();
 
         let mut b: Vec<u8> = vec![];
-        let mut w = JavaWriter::new(&mut b)?;
+        let mut w = ObjectWriter::new(&mut b)?;
 
         let origin = "Hello 世界!";
 
@@ -129,7 +129,7 @@ mod tests {
         init();
 
         let mut b: Vec<u8> = vec![];
-        let mut w = JavaWriter::new(&mut b)?;
+        let mut w = ObjectWriter::new(&mut b)?;
 
         let demo = Demo {
             i: 42,
@@ -157,7 +157,7 @@ mod tests {
         init();
 
         let mut b: Vec<u8> = vec![];
-        let mut w = JavaWriter::new(&mut b)?;
+        let mut w = ObjectWriter::new(&mut b)?;
 
         let order = Order {
             id: 7,
@@ -200,7 +200,7 @@ mod tests {
     }
 
     impl JavaSerializable for CustomPojo {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             self.username.write_to(w)?;
             let enc_password = format!("ENCRYPT_{}", &self.password);
             enc_password.write_to(w)?;

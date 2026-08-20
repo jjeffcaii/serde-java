@@ -1,9 +1,9 @@
-use super::{Class, JavaSerializable, JavaWriter};
+use super::{Class, JavaSerializable, ObjectWriter};
 use crate::ClassFlags;
 use std::io;
 
 impl JavaSerializable for () {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
 }
@@ -58,7 +58,7 @@ impl<'a, I, P> Object<'a, I, P> {
         self.super_instance
     }
 
-    pub fn write_to<W>(&self, w: &mut JavaWriter<W>) -> io::Result<()>
+    pub fn write_to<W>(&self, w: &mut ObjectWriter<W>) -> io::Result<()>
     where
         W: io::Write,
         P: JavaSerializable,
@@ -93,7 +93,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoA {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.id)?;
             Ok(())
         }
@@ -104,7 +104,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoB {
-        fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_string(&self.name)?;
             Ok(())
         }
@@ -141,7 +141,7 @@ mod tests {
         let mut raw: Vec<u8> = vec![];
 
         {
-            let mut jw = JavaWriter::new(&mut raw)?;
+            let mut jw = ObjectWriter::new(&mut raw)?;
 
             obj.write_to(&mut jw)?;
 

@@ -127,7 +127,7 @@ impl JavaObject for Demo {
 }
 
 impl JavaSerializable for Demo {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         self.i.write_to(w)?;        // or, equivalently: w.write_int(self.i)?
         self.message.write_to(w)?;  // or: w.write_string(&self.message)?
         Ok(())
@@ -141,11 +141,11 @@ is `w.write_null()?`.
 `to_bytes()` / `to_file()` come free with `JavaWriteable`. To stream into an arbitrary `io::Write` instead:
 
 ```rust
-let mut w = JavaWriter::new(&mut sink)?;  // writes the stream header
+let mut w = ObjectWriter::new(&mut sink)?;  // writes the stream header
 w.with_dyn(|w| demo.write_to(w))?;
 ```
 
-`with_dyn` hands `write_to` the type-erased `JavaWriter<&mut dyn io::Write>` it expects, over the same sink, keeping
+`with_dyn` hands `write_to` the type-erased `ObjectWriter<&mut dyn io::Write>` it expects, over the same sink, keeping
 handle allocation and the string/class back-reference tables in sync.
 
 Hand-writing is the fallback for what the derive doesn't cover — superclass chains
@@ -331,7 +331,7 @@ Pre-built descriptions of common JDK types live in `serde_java::ext` (currently 
 - **No deserialization.** Write-only; there is no reader for Java streams.
 - **No object-identity dedup.** Handles are allocated per object but never reused, so one Rust value referenced twice
   serializes as two distinct Java objects rather than a back-reference. Cyclic graphs are not supported.
-- **No `char[]` or `String[]` writer.** `JavaWriter` covers `boolean[]`, `byte[]`, `short[]`, `int[]`, `long[]`,
+- **No `char[]` or `String[]` writer.** `ObjectWriter` covers `boolean[]`, `byte[]`, `short[]`, `int[]`, `long[]`,
   `float[]`, `double[]` and object arrays; `char[]` and `String[]` have none yet, which is why the derive rejects
   `Vec<u16>` and `Vec<String>` fields (it rejects `Vec<bool>` too, though `write_boolean_array` does exist).
 - **Custom `writeObject` (`ClassFlags::WRITE_METHOD`) is not honoured** — no type in the tree sets the flag, and the

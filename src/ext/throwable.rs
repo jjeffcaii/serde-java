@@ -1,4 +1,4 @@
-use crate::JavaWriter;
+use crate::ObjectWriter;
 use crate::misc::to_signature;
 use crate::proto::{Class, Field, JavaObject, JavaSerializable, JavaWriteable};
 use once_cell::sync::Lazy;
@@ -101,7 +101,7 @@ impl JavaObject for StackTraceElement {
 }
 
 impl JavaSerializable for StackTraceElement {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> std::io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> std::io::Result<()> {
         // Same order as CLASS_OF_STACK_TRACE_ELEMENT: primitives first, then the strings.
         w.write_byte(self.format)?;
         w.write_int(self.line_number)?;
@@ -117,7 +117,7 @@ impl JavaSerializable for StackTraceElement {
 
 #[inline]
 fn write_nullable_string(
-    w: &mut JavaWriter<&mut dyn Write>,
+    w: &mut ObjectWriter<&mut dyn Write>,
     s: Option<&str>,
 ) -> std::io::Result<()> {
     match s {
@@ -160,7 +160,7 @@ impl JavaObject for Throwable {
 }
 
 impl JavaSerializable for Throwable {
-    fn write_object(&self, w: &mut JavaWriter<&mut dyn Write>) -> std::io::Result<()> {
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> std::io::Result<()> {
         w.write_string(&self.detail_message)?;
         match &self.cause {
             Some(cause) => cause.write_to(w)?,

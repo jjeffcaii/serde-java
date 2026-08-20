@@ -30,14 +30,14 @@ const TC_NULLREF: u8 = 0x70; // alias
 
 const BASE_WIRE_HANDLE: u32 = 0x7e0000;
 
-pub struct JavaWriter<W> {
+pub struct ObjectWriter<W> {
     w: W,
     next_handle: u32,
     string_handles: HashMap<String, u32>,
     class_handles: HashMap<AtomString, u32>,
 }
 
-impl<W: io::Write> JavaWriter<W> {
+impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     fn put_u8(&mut self, b: u8) -> io::Result<()> {
         self.w.write_u8(b)
@@ -94,7 +94,7 @@ impl<W: io::Write> JavaWriter<W> {
     }
 }
 
-impl<W: io::Write> JavaWriter<W> {
+impl<W: io::Write> ObjectWriter<W> {
     pub fn new(mut w: W) -> io::Result<Self> {
         w.write_u16::<BigEndian>(STREAM_MAGIC)?;
         w.write_u16::<BigEndian>(STREAM_VERSION)?;
@@ -109,15 +109,15 @@ impl<W: io::Write> JavaWriter<W> {
 
     /// Runs `f` with a type-erased view of this writer, then takes the mutated stream state back.
     ///
-    /// `JavaWriter<W>` is generic over `W`, so methods taking it cannot be called through a
-    /// `dyn` trait object. This hands out a `JavaWriter<&mut dyn io::Write>` borrowing the same
+    /// `ObjectWriter<W>` is generic over `W`, so methods taking it cannot be called through a
+    /// `dyn` trait object. This hands out a `ObjectWriter<&mut dyn io::Write>` borrowing the same
     /// underlying sink, so handle allocation and the string/class back-reference tables keep
     /// advancing across the call.
     pub fn with_dyn<F, R>(&mut self, f: F) -> R
     where
-        F: FnOnce(&mut JavaWriter<&mut dyn io::Write>) -> R,
+        F: FnOnce(&mut ObjectWriter<&mut dyn io::Write>) -> R,
     {
-        let mut erased = JavaWriter {
+        let mut erased = ObjectWriter {
             next_handle: self.next_handle,
             string_handles: std::mem::take(&mut self.string_handles),
             class_handles: std::mem::take(&mut self.class_handles),
@@ -193,7 +193,7 @@ impl<W: io::Write> JavaWriter<W> {
     }
 }
 
-impl<W: io::Write> JavaWriter<W> {
+impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     pub fn write_string(&mut self, s: &str) -> io::Result<u32> {
         if let Some(&h) = self.string_handles.get(s) {
@@ -354,7 +354,7 @@ impl<W: io::Write> JavaWriter<W> {
     }
 }
 
-impl<W: io::Write> JavaWriter<W> {
+impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     pub fn begin_object(&mut self, class: &Class) -> io::Result<u32> {
         self.put_u8(TC_OBJECT)?;
