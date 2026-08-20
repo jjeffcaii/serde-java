@@ -1,7 +1,8 @@
 use super::object::Object;
 use super::serializable::{JavaObject, JavaSerializable, JavaWriteable};
 use super::writer::ObjectWriter;
-use std::io;
+use std::fmt::{Debug, Formatter};
+use std::{fmt, io};
 
 pub trait Extends<P: Sized>: Sized {
     fn extends(self, parent: P) -> ExtendsLayout<Self, P>;
@@ -33,6 +34,19 @@ impl<T, P> ExtendsLayout<T, P> {
 
     pub fn parent(&self) -> &P {
         &self.parent
+    }
+}
+
+impl<T, P> Debug for ExtendsLayout<T, P>
+where
+    T: fmt::Debug,
+    P: fmt::Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExtendsLayout")
+            .field("this", &self.this)
+            .field("parent", &self.parent)
+            .finish()
     }
 }
 
