@@ -9,6 +9,6 @@ mod map;
 mod number;
 mod throwable;
 
-pub use list::ArrayList;
+pub use list::{ArrayList, LinkedList};
 pub use number::{Byte, Double, Float, Integer, Long, Short};
 pub use throwable::{StackTraceElement, StackTraceElementBuilder, Throwable};

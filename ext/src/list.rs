@@ -2,8 +2,74 @@ use serde_java::__private::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter,
 };
-use std::fmt::Formatter;
 use std::{fmt, io};
+
+static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
+    Class::builder("java.util.LinkedList", 876323262645176354)
+        .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
+        .build()
+});
+
+pub struct LinkedList<T>(pub Vec<T>);
+
+impl<T> fmt::Debug for LinkedList<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(CLASS_OF_LINKED_LIST.name())?;
+        f.debug_list().entries(self.0.iter()).finish()
+    }
+}
+
+impl<T> fmt::Display for LinkedList<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for (i, next) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            fmt::Display::fmt(next, f)?;
+        }
+        f.write_str("]")
+    }
+}
+
+impl<T> From<Vec<T>> for LinkedList<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> JavaObject for LinkedList<T> {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_LINKED_LIST)
+    }
+}
+
+impl<T> JavaSerializable for LinkedList<T>
+where
+    T: JavaWriteable,
+{
+    fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.default_write_object(w)?;
+
+        (self.0.len() as i32).write_to(w)?;
+
+        for next in &self.0 {
+            next.write_to(w)?;
+        }
+
+        Ok(())
+    }
+}
 
 static CLASS_OF_ARRAY_LIST: Lazy<Class> = Lazy::new(|| {
     Class::builder("java.util.ArrayList", 8683452581122892189)
@@ -18,7 +84,7 @@ impl<T> fmt::Debug for ArrayList<T>
 where
     T: fmt::Debug,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(CLASS_OF_ARRAY_LIST.name())?;
         f.debug_list().entries(self.0.iter()).finish()
     }
@@ -28,7 +94,7 @@ impl<T> fmt::Display for ArrayList<T>
 where
     T: fmt::Display,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("[")?;
         for (i, next) in self.0.iter().enumerate() {
             if i > 0 {
@@ -82,6 +148,29 @@ mod tests {
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
+    }
+
+    #[test]
+    fn test_linked_list() -> io::Result<()> {
+        init();
+
+        let l = LinkedList::from(vec![
+            "foo".to_string(),
+            "bar".to_string(),
+            "qux".to_string(),
+        ]);
+
+        info!("debug: {:?}", l);
+        info!("display: {}", l);
+
+        let raw = l.to_bytes()?;
+
+        assert_eq!(
+            "aced0005737200146a6176612e7574696c2e4c696e6b65644c6973740c29535d4a6088220300007870770400000003740003666f6f74000362617274000371757878",
+            hex::encode(raw)
+        );
+
+        Ok(())
     }
 
     #[test]
