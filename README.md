@@ -299,41 +299,181 @@ it is currently **internal** — make it `pub mod suid;` (or re-export the items
 
 ## Type mapping
 
-| Java         | Rust field type (derive)    | Schema (`Field::builder(name)`)    | Value (inside `write_object`)      |
-| ------------ | --------------------------- | ---------------------------------- | ---------------------------------- |
-| `boolean`    | `bool`                      | `.boolean()`                       | `w.write_bool(v)`                  |
-| `byte`       | `u8` or `i8`                | `.byte()`                          | `w.write_byte(v)`                  |
-| `char`       | `u16`                       | `.char()`                          | `w.write_char(v)`                  |
-| `short`      | `i16`                       | `.short()`                         | `w.write_short(v)`                 |
-| `int`        | `i32`                       | `.int()`                           | `w.write_int(v)`                   |
-| `long`       | `i64`                       | `.long()`                          | `w.write_long(v)`                  |
-| `float`      | `f32`                       | `.float()`                         | `w.write_float(v)`                 |
-| `double`     | `f64`                       | `.double()`                        | `w.write_double(v)`                |
-| `String`     | `String` or `&str`          | `.string()`                        | `w.write_string(s)`                |
-| `Foo`        | `Foo: JavaObject`           | `.object("Lcom/example/Foo;")`     | `foo.write_to(w)`                  |
-| `int[]` etc. | `Vec<i32>` or `&[i32]`      | `.int_array()`, …                  | `w.write_int_array(&v)`, …         |
-| `Foo[]`      | `Vec<Foo>`                  | `.array(Foo::class().signature())` | `w.begin_array(&cls, len)` + `write_to` per element |
-| `null`       | `Option<T>`, written `None` | —                                  | `w.write_null()`                   |
+### Rust → Java
 
-Every primitive row also works as `v.write_to(w)` — `JavaWriteable` is implemented for the Rust primitives and
-`String`/`str` too, so a hand-written `write_object` can be uniformly `self.field.write_to(w)?`.
+This is the whole mapping. It is a closed table (`derive/src/ty.rs`), so `#[derive(JavaSerialize)]` picks the row
+straight from the Rust type — and the last two columns are what you write by hand for the same field:
 
-For an object array, `cls` is the array's own class descriptor: `Class::class_of_object_array(&Foo::class())` derives
-it, including the serialVersionUID the JVM computes for `Foo[]` — no magic number to look up.
+| Rust                    | Java               | Descriptor            | Schema — `Field::builder(name)`     | Value — inside `write_object`         |
+| ----------------------- | ------------------ | --------------------- | ----------------------------------- | ------------------------------------- |
+| `bool`                  | `boolean`          | `Z`                   | `.boolean()`                        | `w.write_bool(v)`                     |
+| `i8`                    | `byte`             | `B`                   | `.byte()`                           | `w.write_byte(v as u8)`               |
+| `u8`                    | `byte`             | `B`                   | `.byte()`                           | `w.write_byte(v)`                     |
+| `u16`                   | `char`             | `C`                   | `.char()`                           | `w.write_char(v)`                     |
+| `i16`                   | `short`            | `S`                   | `.short()`                          | `w.write_short(v)`                    |
+| `i32`                   | `int`              | `I`                   | `.int()`                            | `w.write_int(v)`                      |
+| `i64`                   | `long`             | `J`                   | `.long()`                           | `w.write_long(v)`                     |
+| `f32`                   | `float`            | `F`                   | `.float()`                          | `w.write_float(v)`                    |
+| `f64`                   | `double`           | `D`                   | `.double()`                         | `w.write_double(v)`                   |
+| `String`, `&str`        | `java.lang.String` | `Ljava/lang/String;`  | `.string()`                         | `w.write_string(&v)`                  |
+| `T: JavaObject`         | `T`'s Java class   | `Lcom/example/Foo;`   | `.object(T::class().signature())`   | `v.write_to(w)`                       |
+| `Option<T>` = `None`    | `null`             | — (same as `T`)       | same as `T`                         | `w.write_null()`                      |
+| `Vec<u8>`, `&[u8]`      | `byte[]`           | `[B`                  | `.byte_array()`                     | `w.write_byte_array(&v)`              |
+| `Vec<i16>`, `&[i16]`    | `short[]`          | `[S`                  | `.short_array()`                    | `w.write_short_array(&v)`             |
+| `Vec<i32>`, `&[i32]`    | `int[]`            | `[I`                  | `.int_array()`                      | `w.write_int_array(&v)`               |
+| `Vec<i64>`, `&[i64]`    | `long[]`           | `[J`                  | `.long_array()`                     | `w.write_long_array(&v)`              |
+| `Vec<f32>`, `&[f32]`    | `float[]`          | `[F`                  | `.float_array()`                    | `w.write_float_array(&v)`             |
+| `Vec<f64>`, `&[f64]`    | `double[]`         | `[D`                  | `.double_array()`                   | `w.write_double_array(&v)`            |
+| `Vec<T: JavaObject>`    | `T[]`              | `[Lcom/example/Foo;`  | `.array(T::class().signature())`    | `v.write_to(w)`                       |
+| `Vec<String>` †         | `String[]`         | `[Ljava/lang/String;` | `.string_array()`                   | `v.write_to(w)`                       |
+| `Vec<bool>` †           | `boolean[]`        | `[Z`                  | `.boolean_array()`                  | `w.write_boolean_array(&v)`           |
 
-Nested objects, object arrays, and `null` references all work. Strings are written as Java **modified UTF-8**, and
-repeated strings and class descriptors are emitted as `TC_REFERENCE` back-references, matching what the JVM does.
+† hand-written path only — the derive rejects these two (see below), the encoder itself handles them fine.
 
-Pre-built descriptions of common JDK types live in the separate `serde-java-ext` crate (currently `Throwable` and
-`StackTraceElement`), which depends on `serde-java` rather than shipping inside it:
+Every row above also works as plain `v.write_to(w)?`: `JavaWriteable` is implemented for the Rust primitives,
+`String`/`str`, the primitive slices, `Vec<String>` and `Vec<T: JavaObject>`, so a hand-written `write_object` can be
+uniformly `self.field.write_to(w)?` instead of picking the matching `w.write_*` call. For an object array it is the
+only sane form — it derives the array's own class descriptor (`Class::class_of_array(&T::class())`, serialVersionUID
+included) and loops the elements, which by hand is `w.begin_array(&cls, len)?` plus one `write_to` per element.
 
-```toml
-[dependencies]
-serde-java-ext = "0.0.1"
+### Rust types with no Java mapping
+
+Every one of these is a compile-time `syn::Error` at the offending span, not a runtime surprise:
+
+| Rust                                              | Why                                                        | Use instead                     |
+| ------------------------------------------------- | ---------------------------------------------------------- | -------------------------------- |
+| `char`                                            | Rust `char` is 4 bytes, Java `char` is 2                   | `u16`                            |
+| `u32`, `u64`, `usize`, `isize`, `i128`, `u128`    | no Java equivalent ‡                                       | `i32` / `i64`                    |
+| `Option<primitive>`                               | Java primitives cannot be null                             | drop the `Option`, or box it     |
+| `Vec<i8>`                                         | `write_byte_array` takes `&[u8]`                           | `Vec<u8>`                        |
+| `Vec<u16>`, `Vec<char>`                           | no `char[]` writer in `ObjectWriter` yet                   | —                                |
+| `Vec<String>`, `Vec<bool>`                        | writers exist, just not wired into the derive's table      | hand-written impl                |
+| `Vec<Vec<T>>`, `Vec<Option<T>>`, `Option<Option<T>>` | no Java equivalent (`Option<Vec<T>>` *is* fine)         | flatten it                       |
+
+‡ `u32` and `u64` do have `JavaWriteable` impls on the hand-written path (they write `int` and `long` after an `as`
+cast); it is only the derive that refuses to guess for them.
+
+Any *other* type path — `HashMap<K, V>`, a type from another crate, one of the `serde-java-ext` types below — is
+treated as an opaque `JavaObject`, and its descriptor comes from `<T as JavaObject>::class().signature()`. If it does
+not implement `JavaObject`, that is the error you get.
+
+Strings go out as Java **modified UTF-8**, and repeated strings and class descriptors become `TC_REFERENCE`
+back-references, matching what the JVM writes.
+
+### Pre-built JDK types (`serde-java-ext`)
+
+Descriptions of common JDK classes, already written and fixture-verified, in the separate `serde-java-ext`
+crate — it depends on `serde-java`, never the reverse, so they are reached as `serde_java_ext::Integer`:
+
+| Java                                                                 | Rust                                                  | Notes                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
+| `java.lang.Boolean`                                                  | `Boolean(pub bool)`                                   |                                                |
+| `java.lang.Byte` / `Short` / `Integer` / `Long` / `Float` / `Double` | `Byte`, `Short`, `Integer`, `Long`, `Float`, `Double` | each carries its `java.lang.Number` superclass |
+| `java.util.ArrayList<E>`                                             | `ArrayList<T>(pub Vec<T>)`                            | custom `writeObject` block data                |
+| `java.util.LinkedList<E>`                                            | `LinkedList<T>(pub Vec<T>)`                           | custom `writeObject` block data                |
+| `java.lang.Throwable`                                                | `Throwable`                                           | partial — see below                            |
+| `java.lang.StackTraceElement`                                        | `StackTraceElement`                                   | built via `StackTraceElement::builder(..)`     |
+
+`java.util.Map` is not implemented yet (`ext/src/map.rs` is an empty placeholder).
+
+### Boxed primitives
+
+Every box is `From<prim>` / `Into<prim>`, plus `Display` and `Debug`:
+
+```rust
+use serde_java::JavaWriteable;
+use serde_java_ext::{Boolean, Double, Integer};
+
+let bytes = Integer::from(0x01020304).to_bytes()?;
+let n: i32 = Integer::from(42).into();
+
+Double::from(std::f64::consts::PI).to_file("pi.ser")?;
+Boolean::from(true).to_bytes()?;
 ```
+
+The six numeric boxes extend `java.lang.Number`, and the stream says so — the superclass descriptor is emitted for you:
+
+```
+aced0005
+73 72 0011 6a6176612e6c616e672e496e7465676572  // TC_OBJECT, TC_CLASSDESC, "java.lang.Integer"
+12e2a0a4f7818738 02 0001                       // serialVersionUID, SC_SERIALIZABLE, 1 field
+49 0005 76616c7565                             // int value
+78                                             // TC_ENDBLOCKDATA
+72 0010 6a6176612e6c616e672e4e756d626572        // superclass TC_CLASSDESC, "java.lang.Number"
+86ac951d0b94e08b 02 0000 78 70                 // its suid, no fields, no superclass of its own
+01020304                                       // the value
+```
+
+### Collections
+
+```rust
+use serde_java_ext::{ArrayList, Integer, LinkedList};
+
+let names = ArrayList::from(vec!["foo".to_string(), "bar".to_string()]);
+let nums: LinkedList<Integer> = vec![Integer::from(1), Integer::from(2)].into();
+
+let bytes = names.to_bytes()?;
+```
+
+Both are tuple structs over `Vec<T>` (`.0` is the backing vec, and `ArrayList(vec![..])` works as well as `.from(..)`),
+and `T` is anything `JavaWriteable`: a `String`, another ext type, or your own `#[derive(JavaSerialize)]` struct.
+
+They exist because a plain `Vec<T>` is *not* a Java collection — it serializes as a Java **array** (`Foo[]`). A real
+`java.util.ArrayList` writes its elements through a custom `writeObject`, as block data after the declared fields, which
+is what these two reproduce.
+
+### Using them as fields
+
+Ext types are ordinary `JavaObject`s, so they drop straight into a derived struct:
+
+```rust
+use serde_java::JavaSerialize;
+use serde_java_ext::{ArrayList, Integer};
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Payload", serial_version_uid = 3153513349080412905)]
+struct Payload {
+    id: i64,
+    count: Integer,             // java.lang.Integer, not int
+
+    #[java(signature = "Ljava/util/List;")]
+    names: ArrayList<String>,   // Java field declared as List<String>
+}
+```
+
+Two things worth knowing here:
+
+- The derive treats any type path it doesn't recognise as an opaque `JavaObject` and takes the descriptor from
+  `<T as JavaObject>::class().signature()` — `Ljava/util/ArrayList;` for that field. When the Java class declares the
+  field as the *interface* (`List`, `Map`), override it with `#[java(signature = "...")]`. That changes the declared
+  descriptor only; the value side still writes the concrete `java.util.ArrayList` class descriptor, which is exactly
+  what the JVM does.
+- Boxed types and collections are objects, not primitives, so they sort *after* every primitive field — see
+  [Field order is not declaration order](#field-order-is-not-declaration-order). The derive handles that; a hand-written
+  `class()` must not.
+
+### Throwable
 
 ```rust
 use serde_java_ext::{StackTraceElement, Throwable};
+
+let th = Throwable::with_message("something blew up");
+let frame = StackTraceElement::builder("com.example.Foo", "main", "Foo.java", 42).build();
+```
+
+`StackTraceElement` is complete and fixture-verified. `Throwable` is **partial**: it writes `detailMessage` and `cause`,
+but not `stackTrace` or `suppressedExceptions`, so a JVM reading it back gets an exception with no stack. Its
+round-trip test is `#[ignore]`d for that reason.
+
+### Adding a type
+
+`ext/` is where new JDK descriptions belong — it holds pre-built implementations, not protocol primitives. Each file is
+the hand-written path from [The traits behind the derive](#the-traits-behind-the-derive): a `static Lazy<Class>` with
+the real class's name, serialVersionUID and sorted field list, plus `JavaObject` / `JavaSerializable`. The bar for a new
+one is a test asserting `hex::encode(..)` against bytes captured from a real `ObjectOutputStream`:
+
+```sh
+cargo test -p serde-java-ext
 ```
 
 ## Limitations
@@ -344,8 +484,9 @@ use serde_java_ext::{StackTraceElement, Throwable};
 - **No `char[]` or `String[]` writer.** `ObjectWriter` covers `boolean[]`, `byte[]`, `short[]`, `int[]`, `long[]`,
   `float[]`, `double[]` and object arrays; `char[]` and `String[]` have none yet, which is why the derive rejects
   `Vec<u16>` and `Vec<String>` fields (it rejects `Vec<bool>` too, though `write_boolean_array` does exist).
-- **Custom `writeObject` (`ClassFlags::WRITE_METHOD`) is not honoured** — no type in the tree sets the flag, and the
-  block-data framing that would go with it is commented out in `Object::write_to`.
+- **Custom `writeObject` is hand-written only.** `ClassFlags::WRITE_METHOD` works — `serde_java_ext`'s `ArrayList` and
+  `LinkedList` set it, override `JavaSerializable::write_object`, and get proper block-data framing — but
+  `#[derive(JavaSerialize)]` cannot express it.
 - **`serde_java_ext::Throwable` is partial** — it writes `detailMessage` and `cause`, but not `stackTrace` or
   `suppressedExceptions` (its round-trip test is `#[ignore]`d for that reason). `StackTraceElement` is complete.
 - **`suid` is not exported.** `compute_default_suid` and friends live behind a private `mod suid;`, so they are only
@@ -365,6 +506,7 @@ RUST_LOG=debug cargo test --lib -- --nocapture
 
 cargo test --test derive               # the derive macro's integration tests
 bash derive/verify-compile-errors.sh   # its compile-time rejections (18 cases)
+cargo test -p serde-java-ext           # the pre-built JDK type descriptions
 ```
 
 The proc-macro lives in its own workspace member, `derive/`: `attr.rs` parses `#[java(...)]`, `ty.rs` holds the closed
