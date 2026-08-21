@@ -324,7 +324,17 @@ it, including the serialVersionUID the JVM computes for `Foo[]` — no magic num
 Nested objects, object arrays, and `null` references all work. Strings are written as Java **modified UTF-8**, and
 repeated strings and class descriptors are emitted as `TC_REFERENCE` back-references, matching what the JVM does.
 
-Pre-built descriptions of common JDK types live in `serde_java::ext` (currently `Throwable` and `StackTraceElement`).
+Pre-built descriptions of common JDK types live in the separate `serde-java-ext` crate (currently `Throwable` and
+`StackTraceElement`), which depends on `serde-java` rather than shipping inside it:
+
+```toml
+[dependencies]
+serde-java-ext = "0.0.1"
+```
+
+```rust
+use serde_java_ext::{StackTraceElement, Throwable};
+```
 
 ## Limitations
 
@@ -336,7 +346,7 @@ Pre-built descriptions of common JDK types live in `serde_java::ext` (currently 
   `Vec<u16>` and `Vec<String>` fields (it rejects `Vec<bool>` too, though `write_boolean_array` does exist).
 - **Custom `writeObject` (`ClassFlags::WRITE_METHOD`) is not honoured** — no type in the tree sets the flag, and the
   block-data framing that would go with it is commented out in `Object::write_to`.
-- **`ext::Throwable` is partial** — it writes `detailMessage` and `cause`, but not `stackTrace` or
+- **`serde_java_ext::Throwable` is partial** — it writes `detailMessage` and `cause`, but not `stackTrace` or
   `suppressedExceptions` (its round-trip test is `#[ignore]`d for that reason). `StackTraceElement` is complete.
 - **`suid` is not exported.** `compute_default_suid` and friends live behind a private `mod suid;`, so they are only
   reachable from inside the crate today.

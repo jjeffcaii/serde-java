@@ -1,27 +1,15 @@
-use crate::ObjectWriter;
-use crate::misc::to_signature;
-use crate::proto::{Class, Field, JavaObject, JavaSerializable, JavaWriteable};
-use once_cell::sync::Lazy;
-use std::io::Write;
+use serde_java::__private::Lazy;
+use serde_java::{
+    Class, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable, ObjectWriter,
+    util::compute_signature,
+};
+use std::io;
 use std::sync::Arc;
-
-static CLASS_OF_STACK_TRACE_ELEMENT: Lazy<Class> = Lazy::new(|| {
-    Class::builder("java.lang.StackTraceElement", 6992337162326171013)
-        .field(Field::builder("format").byte())
-        .field(Field::builder("lineNumber").int())
-        .field(Field::builder("classLoaderName").string())
-        .field(Field::builder("declaringClass").string())
-        .field(Field::builder("fileName").string())
-        .field(Field::builder("methodName").string())
-        .field(Field::builder("moduleName").string())
-        .field(Field::builder("moduleVersion").string())
-        .build()
-});
 
 static CLASS_OF_THROWABLE: Lazy<Class> = Lazy::new(|| {
     Class::builder("java.lang.Throwable", -3042686055658047285)
         .field(Field::builder("detailMessage").string())
-        .field(Field::builder("cause").object(to_signature("java.lang.Throwable")))
+        .field(Field::builder("cause").object(compute_signature("java.lang.Throwable")))
         .build()
 });
 
@@ -62,15 +50,27 @@ impl<'a> StackTraceElementBuilder<'a> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, JavaSerialize)]
+#[java(
+    class = "java.lang.StackTraceElement",
+    serial_version_uid = 6992337162326171013
+)]
 pub struct StackTraceElement {
+    #[java(rename = "classLoaderName")]
     class_loader_name: Option<String>,
+    #[java(rename = "moduleName")]
     module_name: Option<String>,
+    #[java(rename = "moduleVersion")]
     module_version: Option<String>,
+    #[java(rename = "declaringClass")]
     declaring_class: String,
+    #[java(rename = "methodName")]
     method_name: String,
+    #[java(rename = "fileName")]
     file_name: String,
+    #[java(rename = "lineNumber")]
     line_number: i32,
+    #[java(rename = "format")]
     format: u8,
 }
 
@@ -94,45 +94,12 @@ impl StackTraceElement {
     }
 }
 
-impl JavaObject for StackTraceElement {
-    fn class() -> Class {
-        Clone::clone(&CLASS_OF_STACK_TRACE_ELEMENT)
-    }
-}
-
-impl JavaSerializable for StackTraceElement {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> std::io::Result<()> {
-        // Same order as CLASS_OF_STACK_TRACE_ELEMENT: primitives first, then the strings.
-        w.write_byte(self.format)?;
-        w.write_int(self.line_number)?;
-        write_nullable_string(w, self.class_loader_name.as_deref())?;
-        w.write_string(&self.declaring_class)?;
-        w.write_string(&self.file_name)?;
-        w.write_string(&self.method_name)?;
-        write_nullable_string(w, self.module_name.as_deref())?;
-        write_nullable_string(w, self.module_version.as_deref())?;
-        Ok(())
-    }
-}
-
-#[inline]
-fn write_nullable_string(
-    w: &mut ObjectWriter<&mut dyn Write>,
-    s: Option<&str>,
-) -> std::io::Result<()> {
-    match s {
-        Some(s) => {
-            w.write_string(s)?;
-        }
-        None => w.write_null()?,
-    }
-    Ok(())
-}
-
 #[derive(Debug)]
 pub struct Throwable {
     detail_message: String,
     cause: Option<Arc<Throwable>>,
+    // Not written yet: `write_object` below only emits `detailMessage` and `cause`.
+    #[allow(dead_code)]
     stack_trace: Vec<StackTraceElement>,
 }
 
@@ -160,8 +127,8 @@ impl JavaObject for Throwable {
 }
 
 impl JavaSerializable for Throwable {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> std::io::Result<()> {
-        w.write_string(&self.detail_message)?;
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.detail_message.write_to(w)?;
         match &self.cause {
             Some(cause) => cause.write_to(w)?,
             None => w.write_null()?,
@@ -174,7 +141,7 @@ impl JavaSerializable for Throwable {
 mod tests {
     use super::*;
 
-    use crate::proto::JavaWriteable;
+    use log::info;
     use std::io;
 
     fn init() {

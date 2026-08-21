@@ -1,10 +1,11 @@
 use crate::astr::AtomString;
 use smallvec::SmallVec;
 
-pub(crate) fn to_signature(name: &str) -> AtomString {
-    let mut v = SmallVec::<[u8; 128]>::with_capacity(name.len() + 2);
+/// Compute class signature, eg: `java.lang.String` => `Ljava/lang/String;`
+pub fn compute_signature(classname: &str) -> AtomString {
+    let mut v = SmallVec::<[u8; 128]>::with_capacity(classname.len() + 2);
     v.push(b'L');
-    for next in name.bytes() {
+    for next in classname.bytes() {
         match next {
             b'.' => v.push(b'/'),
             other => v.push(other),
@@ -19,7 +20,7 @@ pub(crate) fn to_signature(name: &str) -> AtomString {
 const N: usize = 32;
 
 /// Encodes to Java modified-UTF-8, returning (bytes, utf16_code_unit_count).
-pub fn to_modified_utf8(s: &str) -> (SmallVec<[u8; N]>, u16) {
+pub(crate) fn to_modified_utf8(s: &str) -> (SmallVec<[u8; N]>, u16) {
     let mut out = SmallVec::<[u8; N]>::with_capacity(s.len());
     let mut count: u16 = 0;
 
@@ -50,8 +51,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_to_signature() {
-        let sig = to_signature("java.lang.String");
+    fn test_compute_signature() {
+        let sig = compute_signature("java.lang.String");
         assert_eq!("Ljava/lang/String;", sig.as_ref());
     }
 }

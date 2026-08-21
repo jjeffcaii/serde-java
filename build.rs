@@ -8,9 +8,12 @@ fn main() {
         .atoms(&[
             // COMMON FIELDS
             "id",
+            "size",
             "[B",
             "Ljava/lang/String;",
             "Ljava/io/Serializable;",
+            "Ljava/util/List;",
+            "Ljava/util/ArrayList;",
         ])
         .write_to_file(&Path::new(&env::var("OUT_DIR").unwrap()).join("astr.rs"))
         .unwrap();

@@ -43,7 +43,7 @@ mod tests {
     }
 
     impl JavaSerializable for Demo {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             w.write_int(self.i)?;
             w.write_string(&self.message)?;
             Ok(())
@@ -67,7 +67,7 @@ mod tests {
     }
 
     impl JavaSerializable for Address {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_string(&self.city)?;
             Ok(())
         }
@@ -92,13 +92,9 @@ mod tests {
     }
 
     impl JavaSerializable for Order {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             w.write_int(self.id)?;
-
-            let obj = Object::<Address, ()>::builder(Address::class())
-                .this(&self.address)
-                .build();
-            obj.write_to(w)?;
+            self.address.write_to(w)?;
             Ok(())
         }
     }
@@ -200,6 +196,10 @@ mod tests {
     }
 
     impl JavaSerializable for CustomPojo {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            todo!()
+        }
+
         fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             self.username.write_to(w)?;
             let enc_password = format!("ENCRYPT_{}", &self.password);

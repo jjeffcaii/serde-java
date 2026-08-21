@@ -1,6 +1,6 @@
 use super::{Class, FieldKind};
 use crate::astr::AtomString;
-use crate::misc::to_modified_utf8;
+use crate::util::to_modified_utf8;
 use byteorder::{BigEndian, WriteBytesExt};
 use hashbrown::HashMap;
 use std::io;
@@ -35,6 +35,7 @@ pub struct ObjectWriter<W> {
     next_handle: u32,
     string_handles: HashMap<String, u32>,
     class_handles: HashMap<AtomString, u32>,
+    blkmode: bool,
 }
 
 impl<W: io::Write> ObjectWriter<W> {
@@ -104,6 +105,7 @@ impl<W: io::Write> ObjectWriter<W> {
             next_handle: BASE_WIRE_HANDLE,
             string_handles: Default::default(),
             class_handles: Default::default(),
+            blkmode: true,
         })
     }
 
@@ -122,6 +124,7 @@ impl<W: io::Write> ObjectWriter<W> {
             string_handles: std::mem::take(&mut self.string_handles),
             class_handles: std::mem::take(&mut self.class_handles),
             w: &mut self.w as &mut dyn io::Write,
+            blkmode: self.blkmode,
         };
 
         let r = f(&mut erased);
@@ -154,41 +157,65 @@ impl<W: io::Write> ObjectWriter<W> {
 
     #[inline]
     pub fn write_byte(&mut self, v: u8) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(1)?;
+        }
         self.put_u8(v)
     }
 
     #[inline]
     pub fn write_bool(&mut self, v: bool) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(1)?;
+        }
         self.put_u8(v as u8)
     }
 
     #[inline]
     pub fn write_char(&mut self, v: u16) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(2)?;
+        }
         self.put_u16(v)
     }
 
     #[inline]
     pub fn write_short(&mut self, v: i16) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(2)?;
+        }
         self.put_i16(v)
     }
 
     #[inline]
     pub fn write_int(&mut self, v: i32) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(4)?;
+        }
         self.put_i32(v)
     }
 
     #[inline]
     pub fn write_long(&mut self, v: i64) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(8)?;
+        }
         self.put_i64(v)
     }
 
     #[inline]
     pub fn write_float(&mut self, v: f32) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(4)?;
+        }
         self.put_f32(v)
     }
 
     #[inline]
     pub fn write_double(&mut self, v: f64) -> io::Result<()> {
+        if self.blkmode {
+            self.begin_block_data(8)?;
+        }
         self.put_f64(v)
     }
 }
@@ -298,10 +325,8 @@ impl<W: io::Write> ObjectWriter<W> {
         let name = cd.cached_name();
         if let Some(&h) = self.class_handles.get(&name) {
             self.write_reference(h)?;
-            debug!("write class reference#{}: {}", h, name.as_ref());
             return Ok(h);
         }
-        debug!("write class full: {}", name.as_ref());
         self.write_class_full(cd)
     }
 
@@ -427,31 +452,29 @@ impl<W: io::Write> ObjectWriter<W> {
         Ok(h)
     }
 
-    /// SC_WRITE_METHOD classes: custom block data is appended after the fields.
     #[inline]
-    pub fn write_custom_block(&mut self, data: &[u8]) -> io::Result<()> {
-        let size = data.len();
-
-        if size <= 255 {
+    fn begin_block_data(&mut self, n: usize) -> io::Result<()> {
+        if n <= 0xff {
             self.put_u8(TC_BLOCKDATA)?;
-            self.put_u8(size as u8)?;
+            self.put_u8(n as u8)?;
         } else {
             self.put_u8(TC_BLOCKDATALONG)?;
-            self.put_u32(size as u32)?;
+            self.put_u32(n as u32)?;
         }
-
-        self.put_all(data)?;
-        self.put_u8(TC_ENDBLOCKDATA)?;
-
         Ok(())
     }
 
-    pub fn end_block_data(&mut self) -> io::Result<()> {
+    #[inline]
+    pub(crate) fn end_block_data(&mut self) -> io::Result<()> {
         self.put_u8(TC_ENDBLOCKDATA)
     }
 
     #[inline]
     pub fn flush(&mut self) -> io::Result<()> {
         self.w.flush()
+    }
+
+    pub(crate) fn set_block_data_mode(&mut self, enabled: bool) {
+        self.blkmode = enabled;
     }
 }

@@ -1,0 +1,21 @@
+[package]
+name = "serde-java-ext"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Jeffsky Tsai <jjeffcaii@outlook.com>"]
+repository = "https://github.com/jjeffcaii/serde-java"
+homepage = "https://github.com/jjeffcaii/serde-java"
+description = "Pre-built Java serialization support for common JDK types."
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+
+[dependencies]
+serde-java = { version = "0.0.1", path = ".." }
+
+[dev-dependencies]
+log = "0.4"
+pretty_env_logger = "0.5"
+hex = "0.4"

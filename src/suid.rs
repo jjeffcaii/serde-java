@@ -1,4 +1,4 @@
-use crate::misc::to_modified_utf8;
+use crate::util::to_modified_utf8;
 
 pub const PUBLIC: i32 = 0x0001;
 pub const PRIVATE: i32 = 0x0002;

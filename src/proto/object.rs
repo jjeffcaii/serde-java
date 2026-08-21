@@ -3,7 +3,7 @@ use crate::ClassFlags;
 use std::io;
 
 impl JavaSerializable for () {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
 }
@@ -87,13 +87,14 @@ mod tests {
     use super::*;
     use crate::Field;
     use std::io;
+    use std::io::Write;
 
     struct PojoA {
         id: i32,
     }
 
     impl JavaSerializable for PojoA {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             w.write_int(self.id)?;
             Ok(())
         }
@@ -104,7 +105,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoB {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             w.write_string(&self.name)?;
             Ok(())
         }

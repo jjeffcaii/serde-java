@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use serde_java::*;
 use std::io;
+use std::io::Write;
 
 #[derive(Debug)]
 struct User {
@@ -54,7 +55,7 @@ impl JavaObject for ExtInfo {
 }
 
 impl JavaSerializable for ExtInfo {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
         self.id.write_to(w)?;
         self.key.write_to(w)?;
         self.value.write_to(w)?;
@@ -91,7 +92,7 @@ impl JavaObject for Address {
 }
 
 impl JavaSerializable for Address {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
         self.city.write_to(w)?;
         self.country.write_to(w)?;
         self.street.write_to(w)?;
@@ -117,14 +118,13 @@ impl JavaObject for User {
 }
 
 impl JavaSerializable for User {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
         self.age.write_to(w)?;
         self.id.write_to(w)?;
         self.addresses.write_to(w)?;
         self.ext1.write_to(w)?;
         self.ext2.write_to(w)?;
         self.name.write_to(w)?;
-
         Ok(())
     }
 }

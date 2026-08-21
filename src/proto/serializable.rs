@@ -8,7 +8,18 @@ pub trait JavaObject {
 }
 
 pub trait JavaSerializable {
-    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()>;
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()>;
+
+    fn default_write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.set_block_data_mode(false);
+        self.write_fields(w)?;
+        w.set_block_data_mode(true);
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.default_write_object(w)
+    }
 }
 
 /// JavaWriteable extends more features.

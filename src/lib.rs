@@ -7,14 +7,11 @@
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate smallvec;
 
 mod error;
-pub mod ext;
-mod misc;
 mod proto;
 mod suid;
+pub mod util;
 
 pub use error::Error;
 pub use proto::*;

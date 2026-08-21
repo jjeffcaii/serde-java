@@ -1,5 +1,4 @@
 use crate::astr::AtomString;
-use crate::misc::to_signature;
 use crate::suid::{self, ClassMetadata};
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
@@ -89,7 +88,7 @@ impl FieldKind {
 
     pub fn of_string() -> Self {
         static KIND: Lazy<FieldKind> =
-            Lazy::new(|| FieldKind::Object(to_signature("java.lang.String")));
+            Lazy::new(|| FieldKind::Object(crate::util::compute_signature("java.lang.String")));
         Clone::clone(&KIND)
     }
 }
@@ -482,7 +481,7 @@ impl<'a> ClassBuilder<'a> {
             name: AtomString::from(name),
             signature: match signature {
                 Some(s) => AtomString::from(s),
-                None => to_signature(name),
+                None => crate::util::compute_signature(name),
             },
             serial_version_uid,
             flags,

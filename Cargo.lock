@@ -363,6 +363,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-java-ext"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "log",
+ "pretty_env_logger",
+ "serde-java",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"

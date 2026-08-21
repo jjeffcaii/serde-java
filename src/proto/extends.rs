@@ -79,6 +79,7 @@ mod tests {
     use super::*;
     use crate::{Class, Field};
     use once_cell::sync::Lazy;
+    use std::io::Write;
 
     struct PojoA {
         id: i32,
@@ -98,7 +99,7 @@ mod tests {
     }
 
     impl JavaSerializable for PojoA {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             w.write_int(self.id)?;
             Ok(())
         }
@@ -121,8 +122,8 @@ mod tests {
     }
 
     impl JavaSerializable for PojoB {
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-            w.write_string(&self.name)?;
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            self.name.write_to(w)?;
             Ok(())
         }
     }
