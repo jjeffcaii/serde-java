@@ -168,6 +168,8 @@ fn test_derive_rename_affects_wire_field_name() {
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Skipped", serial_version_uid = 4)]
+// the skipped fields are never read by design — that is what `skip` means
+#[allow(dead_code)]
 struct Skipped {
     kept: i32,
     #[java(skip)]

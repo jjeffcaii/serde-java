@@ -112,7 +112,7 @@ mod tests {
 
         let actual = hex::encode(&b);
 
-        info!("{}: {}", origin, &actual);
+        info!("{}: {}", origin, actual);
 
         let expect_java = "aced000574000d48656c6c6f20e4b896e7958c21";
         assert_eq!(expect_java, &actual);
@@ -202,7 +202,7 @@ mod tests {
 
         fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
             self.username.write_to(w)?;
-            let enc_password = format!("ENCRYPT_{}", &self.password);
+            let enc_password = format!("ENCRYPT_{}", self.password);
             enc_password.write_to(w)?;
             Ok(())
         }

@@ -53,7 +53,7 @@ pub fn compute_default_suid(meta: &ClassMetadata) -> i64 {
             class_mods & !ABSTRACT
         };
     }
-    buf.extend_from_slice(&(class_mods as i32).to_be_bytes());
+    buf.extend_from_slice(&class_mods.to_be_bytes());
 
     // 3. interface names, sorted alphabetically
     let mut ifaces = meta.interfaces.clone();
@@ -72,19 +72,19 @@ pub fn compute_default_suid(meta: &ClassMetadata) -> i64 {
             (mods & PRIVATE) == 0 || (mods & (STATIC | TRANSIENT)) == 0
         })
         .collect();
-    fields.sort_by(|a, b| a.name.cmp(&b.name));
+    fields.sort_by(|a, b| a.name.cmp(b.name));
     for f in fields {
         let mods =
             f.modifiers & (PUBLIC | PRIVATE | PROTECTED | STATIC | FINAL | VOLATILE | TRANSIENT);
         write_utf(&mut buf, f.name);
-        buf.extend_from_slice(&(mods as i32).to_be_bytes());
+        buf.extend_from_slice(&mods.to_be_bytes());
         write_utf(&mut buf, f.type_sig);
     }
 
     // 5. static initializer
     if meta.has_static_initializer {
         write_utf(&mut buf, "<clinit>");
-        buf.extend_from_slice(&(STATIC as i32).to_be_bytes());
+        buf.extend_from_slice(&STATIC.to_be_bytes());
         write_utf(&mut buf, "()V");
     }
 
@@ -96,11 +96,11 @@ pub fn compute_default_suid(meta: &ClassMetadata) -> i64 {
         .iter()
         .filter(|c| (c.modifiers & PRIVATE) == 0)
         .collect();
-    cons.sort_by(|a, b| a.descriptor.cmp(&b.descriptor));
+    cons.sort_by(|a, b| a.descriptor.cmp(b.descriptor));
     for c in cons {
         let mods = c.modifiers & cons_mask;
         write_utf(&mut buf, "<init>");
-        buf.extend_from_slice(&(mods as i32).to_be_bytes());
+        buf.extend_from_slice(&mods.to_be_bytes());
         write_utf(&mut buf, &c.descriptor.replace('/', "."));
     }
 
@@ -110,11 +110,11 @@ pub fn compute_default_suid(meta: &ClassMetadata) -> i64 {
         .iter()
         .filter(|m| (m.modifiers & PRIVATE) == 0)
         .collect();
-    methods.sort_by(|a, b| a.name.cmp(&b.name).then(a.descriptor.cmp(&b.descriptor)));
+    methods.sort_by(|a, b| a.name.cmp(b.name).then(a.descriptor.cmp(b.descriptor)));
     for m in methods {
         let mods = m.modifiers & cons_mask;
         write_utf(&mut buf, m.name);
-        buf.extend_from_slice(&(mods as i32).to_be_bytes());
+        buf.extend_from_slice(&mods.to_be_bytes());
         write_utf(&mut buf, &m.descriptor.replace('/', "."));
     }
 

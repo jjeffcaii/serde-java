@@ -59,9 +59,9 @@ macro_rules! define_number {
             }
         }
 
-        impl Into<$prim> for $name {
-            fn into(self) -> $prim {
-                let (inner, _) = self.0.into();
+        impl From<$name> for $prim {
+            fn from(value: $name) -> Self {
+                let (inner, _) = value.0.into();
                 inner.0
             }
         }
@@ -229,6 +229,8 @@ mod tests {
     }
 
     #[test]
+    // 3.14 is the value the JVM fixture below was captured with, not an attempt at PI.
+    #[allow(clippy::approx_constant)]
     fn test_java_lang_float() -> io::Result<()> {
         init();
 

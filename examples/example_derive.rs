@@ -80,7 +80,7 @@ fn main() -> Result<()> {
         ext2: ExtInfo::new(888, "k888", "v888"),
     };
 
-    println!("{:?}: {}", &user, hex::encode(&user.to_bytes()?));
+    println!("{:?}: {}", user, hex::encode(&user.to_bytes()?));
 
     Ok(())
 }

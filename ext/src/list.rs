@@ -19,7 +19,24 @@ where
     T: fmt::Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(CLASS_OF_ARRAY_LIST.name())?;
         f.debug_list().entries(self.0.iter()).finish()
+    }
+}
+
+impl<T> fmt::Display for ArrayList<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for (i, next) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            fmt::Display::fmt(next, f)?;
+        }
+        f.write_str("]")
     }
 }
 
@@ -79,13 +96,14 @@ mod tests {
             "gob".to_string(),
         ]);
 
-        let b = l.to_bytes()?;
+        info!("debug: {:?}", l);
+        info!("display: {}", l);
 
-        l.to_file("/Users/jeffsky/Desktop/rust_arraylist.dat")?;
+        let raw = l.to_bytes()?;
 
         assert_eq!(
             "aced0005737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000005770400000005740003666f6f74000362617274000362617a740003717578740003676f6278",
-            hex::encode(b)
+            hex::encode(raw)
         );
 
         Ok(())
@@ -117,8 +135,6 @@ mod tests {
         };
 
         let b = l.to_bytes()?;
-
-        l.to_file("/Users/jeffsky/Desktop/rust.dat")?;
 
         assert_eq!(
             "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f74000362617274000371757878",

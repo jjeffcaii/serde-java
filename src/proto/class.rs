@@ -136,7 +136,7 @@ impl PartialOrd for Field {
 
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({},{})", self.0.as_ref(), &self.1)
+        write!(f, "({},{})", self.0.as_ref(), self.1)
     }
 }
 
@@ -531,14 +531,12 @@ mod tests {
         init();
 
         // declaration order of examples/example.java
-        let mut fields = vec![
-            Field::builder("id").long(),
+        let mut fields = [Field::builder("id").long(),
             Field::builder("name").string(),
             Field::builder("age").int(),
             Field::builder("addresses").array("Lcom/example/Address;"),
             Field::builder("ext1").object("java.util.Map"),
-            Field::builder("ext2").object("java.util.Map"),
-        ];
+            Field::builder("ext2").object("java.util.Map")];
         fields.sort();
 
         let actual: Vec<&str> = fields.iter().map(Field::name).collect();
