@@ -75,7 +75,7 @@ impl<'a, I, P> Object<'a, I, P> {
         }
 
         if self.class.flags().contains(ClassFlags::WRITE_METHOD) {
-            w.end_block_data()?;
+            w.end()?;
         }
 
         Ok(())

@@ -178,12 +178,14 @@ mod tests {
         Ok(())
     }
 
-    struct CustomPojo {
+    struct CustomPojo1 {
         username: String,
-        password: String,
+        password: String, // transient
+        admin: bool,      // transient
+        enabled: bool,    // transient
     }
 
-    impl JavaObject for CustomPojo {
+    impl JavaObject for CustomPojo1 {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
                 Class::builder("com.example.CustomPojo", -3231298442776514728)
@@ -195,13 +197,17 @@ mod tests {
         }
     }
 
-    impl JavaSerializable for CustomPojo {
+    impl JavaSerializable for CustomPojo1 {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
-            todo!()
+            self.username.write_to(w)?;
+            Ok(())
         }
 
         fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
-            self.username.write_to(w)?;
+            self.default_write_object(w)?;
+
+            self.admin.write_to(w)?;
+            self.enabled.write_to(w)?;
             let enc_password = format!("ENCRYPT_{}", self.password);
             enc_password.write_to(w)?;
             Ok(())
@@ -212,17 +218,134 @@ mod tests {
     fn test_custom_pojo() -> Result<()> {
         init();
 
-        let cp = CustomPojo {
+        let input = CustomPojo1 {
             username: "fake_username".to_string(),
             password: "fake_password".to_string(),
+            admin: true,
+            enabled: false,
         };
 
-        let b = cp.to_bytes()?;
+        let raw = input.to_bytes()?;
 
-        let actual = hex::encode(&b);
-        let expect = "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65740015454e43525950545f66616b655f70617373776f726478";
+        assert_eq!(
+            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d6577020100740015454e43525950545f66616b655f70617373776f726478",
+            hex::encode(&raw)
+        );
 
-        assert_eq!(expect, &actual);
+        Ok(())
+    }
+
+    struct CustomPojo2 {
+        username: String,
+        password: String, // transient
+        admin: bool,      // transient
+        enabled: bool,    // transient
+    }
+
+    impl JavaObject for CustomPojo2 {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                    .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
+                    .field(Field::builder("username").string())
+                    .build()
+            });
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for CustomPojo2 {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            self.username.write_to(w)?;
+            Ok(())
+        }
+
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            self.default_write_object(w)?;
+
+            self.admin.write_to(w)?;
+            let enc_password = format!("ENCRYPT_{}", self.password);
+            enc_password.write_to(w)?;
+            self.enabled.write_to(w)?;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_custom_pojo2() -> Result<()> {
+        init();
+
+        let input = CustomPojo2 {
+            username: "fake_username".to_string(),
+            password: "fake_password".to_string(),
+            admin: true,
+            enabled: false,
+        };
+
+        let raw = input.to_bytes()?;
+
+        assert_eq!(
+            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65770101740015454e43525950545f66616b655f70617373776f726477010078",
+            hex::encode(&raw)
+        );
+
+        Ok(())
+    }
+
+    struct CustomPojo3 {
+        username: String,
+        password: String, // transient
+        admin: bool,      // transient
+        enabled: bool,    // transient
+    }
+
+    impl JavaObject for CustomPojo3 {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                    .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
+                    .field(Field::builder("username").string())
+                    .build()
+            });
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for CustomPojo3 {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            self.username.write_to(w)?;
+            Ok(())
+        }
+
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            self.default_write_object(w)?;
+
+            let enc_password = format!("ENCRYPT_{}", self.password);
+            enc_password.write_to(w)?;
+
+            self.admin.write_to(w)?;
+            self.enabled.write_to(w)?;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_custom_pojo3() -> Result<()> {
+        init();
+
+        let input = CustomPojo3 {
+            username: "fake_username".to_string(),
+            password: "fake_password".to_string(),
+            admin: true,
+            enabled: false,
+        };
+
+        let raw = input.to_bytes()?;
+
+        assert_eq!(
+            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65740015454e43525950545f66616b655f70617373776f72647702010078",
+            hex::encode(&raw)
+        );
 
         Ok(())
     }

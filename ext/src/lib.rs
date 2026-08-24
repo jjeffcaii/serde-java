@@ -12,5 +12,6 @@ mod throwable;
 
 pub use boolean::Boolean;
 pub use list::{ArrayList, LinkedList};
+pub use map::HashMap;
 pub use number::{Byte, Double, Float, Integer, Long, Short};
 pub use throwable::{StackTraceElement, StackTraceElementBuilder, Throwable};

@@ -36,6 +36,7 @@ pub struct ObjectWriter<W> {
     string_handles: HashMap<String, u32>,
     class_handles: HashMap<AtomString, u32>,
     blkmode: bool,
+    blk: Option<Vec<u8>>,
 }
 
 impl<W: io::Write> ObjectWriter<W> {
@@ -106,6 +107,7 @@ impl<W: io::Write> ObjectWriter<W> {
             string_handles: Default::default(),
             class_handles: Default::default(),
             blkmode: true,
+            blk: None,
         })
     }
 
@@ -125,6 +127,7 @@ impl<W: io::Write> ObjectWriter<W> {
             class_handles: std::mem::take(&mut self.class_handles),
             w: &mut self.w as &mut dyn io::Write,
             blkmode: self.blkmode,
+            blk: std::mem::take(&mut self.blk),
         };
 
         let r = f(&mut erased);
@@ -132,6 +135,7 @@ impl<W: io::Write> ObjectWriter<W> {
         self.next_handle = erased.next_handle;
         self.string_handles = std::mem::take(&mut erased.string_handles);
         self.class_handles = std::mem::take(&mut erased.class_handles);
+        self.blk = std::mem::take(&mut erased.blk);
 
         r
     }
@@ -158,71 +162,80 @@ impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     pub fn write_byte(&mut self, v: u8) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(1)?;
+            self.blk.get_or_insert_default().write_u8(v)
+        } else {
+            self.put_u8(v)
         }
-        self.put_u8(v)
     }
 
     #[inline]
     pub fn write_bool(&mut self, v: bool) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(1)?;
+            self.blk.get_or_insert_default().write_u8(v as u8)
+        } else {
+            self.put_u8(v as u8)
         }
-        self.put_u8(v as u8)
     }
 
     #[inline]
     pub fn write_char(&mut self, v: u16) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(2)?;
+            self.blk.get_or_insert_default().write_u16::<BigEndian>(v)
+        } else {
+            self.put_u16(v)
         }
-        self.put_u16(v)
     }
 
     #[inline]
     pub fn write_short(&mut self, v: i16) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(2)?;
+            self.blk.get_or_insert_default().write_i16::<BigEndian>(v)
+        } else {
+            self.put_i16(v)
         }
-        self.put_i16(v)
     }
 
     #[inline]
     pub fn write_int(&mut self, v: i32) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(4)?;
+            self.blk.get_or_insert_default().write_i32::<BigEndian>(v)
+        } else {
+            self.put_i32(v)
         }
-        self.put_i32(v)
     }
 
     #[inline]
     pub fn write_long(&mut self, v: i64) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(8)?;
+            self.blk.get_or_insert_default().write_i64::<BigEndian>(v)
+        } else {
+            self.put_i64(v)
         }
-        self.put_i64(v)
     }
 
     #[inline]
     pub fn write_float(&mut self, v: f32) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(4)?;
+            self.blk.get_or_insert_default().write_f32::<BigEndian>(v)
+        } else {
+            self.put_f32(v)
         }
-        self.put_f32(v)
     }
 
     #[inline]
     pub fn write_double(&mut self, v: f64) -> io::Result<()> {
         if self.blkmode {
-            self.begin_block_data(8)?;
+            self.blk.get_or_insert_default().write_f64::<BigEndian>(v)
+        } else {
+            self.put_f64(v)
         }
-        self.put_f64(v)
     }
 }
 
 impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     pub fn write_string(&mut self, s: &str) -> io::Result<u32> {
+        self.flush()?;
         if let Some(&h) = self.string_handles.get(s) {
             self.write_reference(h)?;
             debug!("write reference#{}: {}", h - BASE_WIRE_HANDLE, s);
@@ -416,78 +429,31 @@ impl<W: io::Write> ObjectWriter<W> {
 impl<W: io::Write> ObjectWriter<W> {
     #[inline]
     pub fn begin_object(&mut self, class: &Class) -> io::Result<u32> {
+        self.flush()?;
+
         self.put_u8(TC_OBJECT)?;
 
         self.write_class(class)?;
 
-        let h = self.alloc_handle();
-
-        // for v in values {
-        //     match v {
-        //         FieldValue::Byte(x) => self.write_byte(*x)?,
-        //         FieldValue::Bool(x) => self.write_bool(*x)?,
-        //         FieldValue::Char(x) => self.write_char(*x)?,
-        //         FieldValue::Short(x) => self.write_short(*x)?,
-        //         FieldValue::Int(x) => self.write_int(*x)?,
-        //         FieldValue::Long(x) => self.write_long(*x)?,
-        //         FieldValue::Float(x) => self.write_float(*x)?,
-        //         FieldValue::Double(x) => self.write_double(*x)?,
-        //         FieldValue::String(s) => {
-        //             self.write_string(s)?;
-        //         }
-        //         FieldValue::Object(class, obj) => {
-        //             // self.write_object(class, &obj.fields())?;
-        //             unreachable!()
-        //         }
-        //         FieldValue::Null => self.write_null()?,
-        //         FieldValue::BoolArray(_) => {
-        //             todo!("write boolean array!")
-        //         }
-        //         FieldValue::CharArray(_) => {
-        //             todo!("write character array!")
-        //         }
-        //         FieldValue::ByteArray(x) => {
-        //             self.write_byte_array(*x)?;
-        //         }
-        //         FieldValue::ShortArray(x) => {
-        //             self.write_short_array(*x)?;
-        //         }
-        //         FieldValue::IntArray(x) => {
-        //             self.write_int_array(*x)?;
-        //         }
-        //         FieldValue::LongArray(x) => {
-        //             self.write_long_array(*x)?;
-        //         }
-        //         FieldValue::FloatArray(x) => {
-        //             self.write_float_array(*x)?;
-        //         }
-        //         FieldValue::DoubleArray(x) => {
-        //             self.write_double_array(*x)?;
-        //         }
-        //         FieldValue::StringArray(x) => {
-        //             todo!("write string array!")
-        //         }
-        //         FieldValue::Array(class_of_array, x) => {
-        //             // info!(
-        //             //     "begin write array: class={}, len={}",
-        //             //     class_of_array.signature(),
-        //             //     x.len()
-        //             // );
-        //             //
-        //             // self.write_primitive_array(class_of_array, x, |w, (class_of_item, it)| {
-        //             //     let next_fields = it.fields();
-        //             //     w.write_object(class_of_item, &next_fields)?;
-        //             //     Ok(())
-        //             // })?;
-        //             unreachable!()
-        //         }
-        //     }
-        // }
-        Ok(h)
+        Ok(self.alloc_handle())
     }
 
     #[inline]
-    fn begin_block_data(&mut self, n: usize) -> io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
+        if !self.blkmode {
+            return Ok(());
+        }
+
+        if let Some(blk) = self.blk.take() {
+            self.write_block_data(&blk)?;
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn write_block_data(&mut self, data: &[u8]) -> io::Result<()> {
+        let n = data.len();
         if n <= 0xff {
             self.put_u8(TC_BLOCKDATA)?;
             self.put_u8(n as u8)?;
@@ -495,17 +461,16 @@ impl<W: io::Write> ObjectWriter<W> {
             self.put_u8(TC_BLOCKDATALONG)?;
             self.put_u32(n as u32)?;
         }
+
+        self.w.write_all(data)?;
+
         Ok(())
     }
 
     #[inline]
-    pub(crate) fn end_block_data(&mut self) -> io::Result<()> {
+    pub(crate) fn end(&mut self) -> io::Result<()> {
+        self.flush()?;
         self.put_u8(TC_ENDBLOCKDATA)
-    }
-
-    #[inline]
-    pub fn flush(&mut self) -> io::Result<()> {
-        self.w.flush()
     }
 
     pub(crate) fn set_block_data_mode(&mut self, enabled: bool) {
