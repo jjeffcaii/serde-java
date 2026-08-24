@@ -161,6 +161,13 @@ Field attributes:
 - `#[java(skip)]` — Java `transient`; omitted from both schema and value
 - `#[java(signature = "...")]` — overrides the declared descriptor signature only; the value side still follows the
   Rust type
+- `#[java(with = "path::to::SomeLayout")]` — overrides the *value* side: the field is written as
+  `SomeLayout::layout(&self.field).write_to(w)`, where `SomeLayout: serde_java::Layout`. This bypasses the Rust→Java
+  mapping table entirely, so it must be paired with an explicit `signature`, and it always sorts into the object
+  group regardless of the field's Rust type. For an `Option<T>` field, pair `with` with a `Layout<Input = T>` — `None`
+  writes `null` directly and only `Some(v)` goes through `Layout::layout`. This is how `serde-java-ext`'s
+  `ArrayList`/`LinkedList`/`Boolean`/boxed numbers attach to a plain `Vec<T>`/`bool`/primitive field — see
+  [Using them as fields](#using-them-as-fields).
 
 Supported field types: the Java primitives (`bool`, `i8`, `u8`, `u16`, `i16`, `i32`, `i64`, `f32`, `f64`),
 `String`/`&str`, primitive arrays (`Vec<u8|i16|i32|i64|f32|f64>` or the equivalent `&[T]` slices), object arrays
@@ -369,8 +376,8 @@ crate — it depends on `serde-java`, never the reverse, so they are reached as 
 | -------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
 | `java.lang.Boolean`                                                  | `Boolean(pub bool)`                                   |                                                |
 | `java.lang.Byte` / `Short` / `Integer` / `Long` / `Float` / `Double` | `Byte`, `Short`, `Integer`, `Long`, `Float`, `Double` | each carries its `java.lang.Number` superclass |
-| `java.util.ArrayList<E>`                                             | `ArrayList<T>(pub Vec<T>)`                            | custom `writeObject` block data                |
-| `java.util.LinkedList<E>`                                            | `LinkedList<T>(pub Vec<T>)`                           | custom `writeObject` block data                |
+| `java.util.ArrayList<E>`                                             | `ArrayList<'a, T>(pub &'a [T])`                       | `Layout` over `Vec<T>`; custom `writeObject` block data |
+| `java.util.LinkedList<E>`                                            | `LinkedList<'a, T>(pub &'a [T])`                      | `Layout` over `Vec<T>`; custom `writeObject` block data |
 | `java.lang.Throwable`                                                | `Throwable`                                           | partial — see below                            |
 | `java.lang.StackTraceElement`                                        | `StackTraceElement`                                   | built via `StackTraceElement::builder(..)`     |
 
@@ -409,26 +416,34 @@ aced0005
 ```rust
 use serde_java_ext::{ArrayList, Integer, LinkedList};
 
-let names = ArrayList::from(vec!["foo".to_string(), "bar".to_string()]);
-let nums: LinkedList<Integer> = vec![Integer::from(1), Integer::from(2)].into();
+let names = vec!["foo".to_string(), "bar".to_string()];
+let list = ArrayList::from(&names[..]);   // or ArrayList::from(&names)
 
-let bytes = names.to_bytes()?;
+let nums = vec![Integer::from(1), Integer::from(2)];
+let linked = LinkedList::from(&nums[..]);
+
+let bytes = list.to_bytes()?;
 ```
 
-Both are tuple structs over `Vec<T>` (`.0` is the backing vec, and `ArrayList(vec![..])` works as well as `.from(..)`),
-and `T` is anything `JavaWriteable`: a `String`, another ext type, or your own `#[derive(JavaSerialize)]` struct.
+Both are tuple structs borrowing a slice (`ArrayList<'a, T>(pub &'a [T])`, `LinkedList<'a, T>(pub &'a [T])`) — built
+via `::from(&v[..])`, or `ArrayList::from(&v)` directly over a `&Vec<T>` — and `T` is anything `JavaWriteable`: a
+`String`, another ext type, or your own `#[derive(JavaSerialize)]` struct.
 
 They exist because a plain `Vec<T>` is *not* a Java collection — it serializes as a Java **array** (`Foo[]`). A real
-`java.util.ArrayList` writes its elements through a custom `writeObject`, as block data after the declared fields, which
-is what these two reproduce.
+`java.util.ArrayList`/`LinkedList` writes its elements through a custom `writeObject`, as block data after the
+declared fields, which is what these two reproduce. Both also implement `serde_java::Layout` (`Input = Vec<T>`),
+which is what lets them drop straight onto a derived struct's `Vec<T>` field via `#[java(with = "...")]` — see
+[Using them as fields](#using-them-as-fields).
 
 ### Using them as fields
 
-Ext types are ordinary `JavaObject`s, so they drop straight into a derived struct:
+Boxed types (`Integer`, `Boolean`, …) are ordinary `JavaObject`s and drop straight into a derived struct as their own
+field type. `ArrayList`/`LinkedList` can't — they borrow (`ArrayList<'a, T>`), so a struct can't own one as a field —
+instead route a plain `Vec<T>` field through them with `#[java(with = "...")]`:
 
 ```rust
 use serde_java::JavaSerialize;
-use serde_java_ext::{ArrayList, Integer};
+use serde_java_ext::Integer;
 
 #[derive(JavaSerialize)]
 #[java(class = "com.example.Payload", serial_version_uid = 3153513349080412905)]
@@ -436,21 +451,28 @@ struct Payload {
     id: i64,
     count: Integer,             // java.lang.Integer, not int
 
-    #[java(signature = "Ljava/util/List;")]
-    names: ArrayList<String>,   // Java field declared as List<String>
+    #[java(signature = "Ljava/util/List;", with = "serde_java_ext::ArrayList")]
+    names: Vec<String>,         // Java field declared as List<String>
 }
 ```
 
-Two things worth knowing here:
+The field keeps its plain Rust shape (`Vec<String>`); `with` is what routes it through
+`ArrayList::layout(&self.names).write_to(w)` instead of the default `Vec<T>` → `T[]` array mapping. This is also why
+`ArrayList`/`LinkedList` are borrowed wrapper types rather than owning their own `Vec<T>`: `Layout::layout` only needs
+to hand back a borrowed view for the one `write_to` call the derive makes. For a `with` field declared as
+`Option<Vec<String>>`, `None` writes `null` directly and only `Some(names)` goes through `ArrayList::layout(names)` —
+see `ext/src/list.rs`'s `ListDemo` test for the worked example.
 
-- The derive treats any type path it doesn't recognise as an opaque `JavaObject` and takes the descriptor from
-  `<T as JavaObject>::class().signature()` — `Ljava/util/ArrayList;` for that field. When the Java class declares the
-  field as the *interface* (`List`, `Map`), override it with `#[java(signature = "...")]`. That changes the declared
-  descriptor only; the value side still writes the concrete `java.util.ArrayList` class descriptor, which is exactly
-  what the JVM does.
-- Boxed types and collections are objects, not primitives, so they sort *after* every primitive field — see
-  [Field order is not declaration order](#field-order-is-not-declaration-order). The derive handles that; a hand-written
-  `class()` must not.
+Three things worth knowing here:
+
+- `with` bypasses the derive's Rust→Java mapping table entirely, so it must be paired with an explicit
+  `#[java(signature = "...")]` — the descriptor no longer comes from the field's Rust type.
+- The declared descriptor is the interface (`Ljava/util/List;`, from `signature`), but the value side still writes
+  the concrete `java.util.ArrayList` class descriptor — via `<ArrayList<T> as JavaObject>::class()` — which is
+  exactly what the JVM does for a field declared as `List` but assigned an `ArrayList`.
+- `with` fields always sort into the object group, after every primitive field, regardless of their Rust type — see
+  [Field order is not declaration order](#field-order-is-not-declaration-order). The derive handles that; a
+  hand-written `class()` must not.
 
 ### Throwable
 
