@@ -9,11 +9,13 @@
 extern crate log;
 
 mod error;
+mod layout;
 mod proto;
 mod suid;
 pub mod util;
 
 pub use error::Error;
+pub use layout::Layout;
 pub use proto::*;
 
 #[cfg(feature = "derive")]

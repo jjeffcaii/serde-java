@@ -1,6 +1,6 @@
 use serde_java::__private::Lazy;
 use serde_java::{
-    Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter,
+    Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
 };
 use std::{fmt, io};
 
@@ -10,9 +10,9 @@ static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-pub struct LinkedList<T>(pub Vec<T>);
+pub struct LinkedList<'a, T>(pub &'a [T]);
 
-impl<T> fmt::Debug for LinkedList<T>
+impl<'a, T> fmt::Debug for LinkedList<'a, T>
 where
     T: fmt::Debug,
 {
@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<T> fmt::Display for LinkedList<T>
+impl<'a, T> fmt::Display for LinkedList<'a, T>
 where
     T: fmt::Display,
 {
@@ -38,19 +38,19 @@ where
     }
 }
 
-impl<T> From<Vec<T>> for LinkedList<T> {
-    fn from(value: Vec<T>) -> Self {
+impl<'a, T> From<&'a [T]> for LinkedList<'a, T> {
+    fn from(value: &'a [T]) -> Self {
         Self(value)
     }
 }
 
-impl<T> JavaObject for LinkedList<T> {
+impl<'a, T> JavaObject for LinkedList<'a, T> {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_LINKED_LIST)
     }
 }
 
-impl<T> JavaSerializable for LinkedList<T>
+impl<'a, T> JavaSerializable for LinkedList<'a, T>
 where
     T: JavaWriteable,
 {
@@ -63,11 +63,21 @@ where
 
         (self.0.len() as i32).write_to(w)?;
 
-        for next in &self.0 {
+        for next in self.0 {
+            // TODO: convert primitive value to boxed
             next.write_to(w)?;
         }
 
         Ok(())
+    }
+}
+
+impl<'a, T> Layout<'a> for LinkedList<'a, T> {
+    type Input = Vec<T>;
+    type Output = LinkedList<'a, T>;
+
+    fn layout(input: &'a Self::Input) -> Self::Output {
+        LinkedList(&input)
     }
 }
 
@@ -78,9 +88,9 @@ static CLASS_OF_ARRAY_LIST: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-pub struct ArrayList<T>(pub Vec<T>);
+pub struct ArrayList<'a, T>(pub &'a [T]);
 
-impl<T> fmt::Debug for ArrayList<T>
+impl<'a, T> fmt::Debug for ArrayList<'a, T>
 where
     T: fmt::Debug,
 {
@@ -90,7 +100,7 @@ where
     }
 }
 
-impl<T> fmt::Display for ArrayList<T>
+impl<'a, T> fmt::Display for ArrayList<'a, T>
 where
     T: fmt::Display,
 {
@@ -106,19 +116,25 @@ where
     }
 }
 
-impl<T> From<Vec<T>> for ArrayList<T> {
-    fn from(value: Vec<T>) -> Self {
+impl<'a, T> From<&'a Vec<T>> for ArrayList<'a, T> {
+    fn from(value: &'a Vec<T>) -> Self {
+        From::from(value.as_slice())
+    }
+}
+
+impl<'a, T> From<&'a [T]> for ArrayList<'a, T> {
+    fn from(value: &'a [T]) -> Self {
         Self(value)
     }
 }
 
-impl<T> JavaObject for ArrayList<T> {
+impl<'a, T> JavaObject for ArrayList<'a, T> {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_ARRAY_LIST)
     }
 }
 
-impl<T> JavaSerializable for ArrayList<T>
+impl<'a, T> JavaSerializable for ArrayList<'a, T>
 where
     T: JavaWriteable,
 {
@@ -132,11 +148,21 @@ where
 
         (self.0.len() as i32).write_to(w)?;
 
-        for next in &self.0 {
+        for next in self.0 {
+            // TODO: convert primitive value to boxed
             next.write_to(w)?
         }
 
         Ok(())
+    }
+}
+
+impl<'a, T> Layout<'a> for ArrayList<'a, T> {
+    type Input = Vec<T>;
+    type Output = ArrayList<'a, T>;
+
+    fn layout(input: &'a Self::Input) -> Self::Output {
+        ArrayList(input)
     }
 }
 
@@ -154,11 +180,8 @@ mod tests {
     fn test_linked_list() -> io::Result<()> {
         init();
 
-        let l = LinkedList::from(vec![
-            "foo".to_string(),
-            "bar".to_string(),
-            "qux".to_string(),
-        ]);
+        let origin = vec!["foo".to_string(), "bar".to_string(), "qux".to_string()];
+        let l = LinkedList::from(&origin[..]);
 
         info!("debug: {:?}", l);
         info!("display: {}", l);
@@ -173,17 +196,47 @@ mod tests {
         Ok(())
     }
 
+    #[derive(Debug, JavaSerialize)]
+    #[java(class="com.example.LinkedListDemo",serial_version_uid=-2897624825673425478)]
+    struct LinkedListDemo {
+        id: i32,
+        #[java(signature = "Ljava/util/List;", with = "crate::LinkedList")]
+        names: Vec<String>,
+    }
+
+    #[test]
+    fn test_linked_list_field() -> io::Result<()> {
+        init();
+
+        let v = LinkedListDemo {
+            id: -1,
+            names: vec!["foo".into(), "bar".into(), "qux".into()],
+        };
+
+        info!("{:?}", &v);
+
+        let raw = v.to_bytes()?;
+
+        assert_eq!(
+            "aced00057372001a636f6d2e6578616d706c652e4c696e6b65644c69737444656d6fd7c99192c561ddba02000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b7870ffffffff737200146a6176612e7574696c2e4c696e6b65644c6973740c29535d4a6088220300007870770400000003740003666f6f74000362617274000371757878",
+            hex::encode(&raw)
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_array_list() -> io::Result<()> {
         init();
 
-        let l = ArrayList::from(vec![
+        let origin = vec![
             "foo".to_string(),
             "bar".to_string(),
             "baz".to_string(),
             "qux".to_string(),
             "gob".to_string(),
-        ]);
+        ];
+        let l = ArrayList::from(&origin[..]);
 
         info!("debug: {:?}", l);
         info!("display: {}", l);
@@ -205,30 +258,45 @@ mod tests {
     )]
     struct ListDemo {
         id: i32,
-
-        #[java(signature = "Ljava/util/List;")]
-        names: ArrayList<String>,
+        #[java(signature = "Ljava/util/List;", with = "crate::ArrayList")]
+        names: Option<Vec<String>>,
     }
 
     #[test]
     fn test_list_demo() -> io::Result<()> {
         init();
 
-        let l = ListDemo {
-            id: 0xffff,
-            names: ArrayList(vec![
-                "foo".to_string(),
-                "bar".to_string(),
-                "qux".to_string(),
-            ]),
-        };
+        // check null names
+        {
+            let l = ListDemo {
+                id: 0xffff,
+                names: None,
+            };
 
-        let b = l.to_bytes()?;
+            info!("{:?}", &l);
 
-        assert_eq!(
-            "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f74000362617274000371757878",
-            hex::encode(&b)
-        );
+            let raw = l.to_bytes()?;
+            assert_eq!(
+                "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff70",
+                hex::encode(&raw)
+            );
+        }
+
+        // check non-null names
+        {
+            let l = ListDemo {
+                id: 0xffff,
+                names: Some(vec!["foo".into(), "bar".into(), "qux".into()]),
+            };
+
+            info!("{:?}", &l);
+
+            let raw = l.to_bytes()?;
+            assert_eq!(
+                "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f74000362617274000371757878",
+                hex::encode(&raw)
+            );
+        }
 
         Ok(())
     }

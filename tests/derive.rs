@@ -450,3 +450,126 @@ fn test_derive_raw_identifier_field_name() {
     // Sorted by Java name once the `r#` prefix is stripped: final, type (both primitives)
     assert_eq!(vec!["final", "type"], names);
 }
+
+// ---- with = "..." (custom `Layout`) ----
+
+/// Writes a `Vec<String>` as a `java.lang.String[]`, which the mapping table refuses to do
+/// on its own — the point of `with` is to route around it.
+struct StringArray<'a>(&'a Vec<String>);
+
+impl<'a> Layout<'a> for StringArray<'a> {
+    type Input = Vec<String>;
+    type Output = StringArray<'a>;
+
+    fn layout(input: &'a Self::Input) -> Self::Output {
+        StringArray(input)
+    }
+}
+
+impl<'a> JavaWriteable for StringArray<'a> {
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.0.write_to(w)
+    }
+}
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.Tags", serial_version_uid = 11)]
+struct DerivedTags {
+    id: i32,
+    #[java(signature = "[Ljava/lang/String;", with = "StringArray")]
+    tags: Vec<String>,
+}
+
+// The hand-written twin: same class, same SUID, same field list.
+struct HandTags {
+    id: i32,
+    tags: Vec<String>,
+}
+
+impl JavaObject for HandTags {
+    fn class() -> Class {
+        Class::builder("com.example.Tags", 11)
+            .field(Field::builder("id").int())
+            .field(Field::builder("tags").array("Ljava/lang/String;"))
+            .build()
+    }
+}
+
+impl JavaSerializable for HandTags {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_int(self.id)?;
+        self.tags.write_to(w)?;
+        Ok(())
+    }
+}
+
+#[test]
+fn test_derive_with_layout_matches_handwritten() {
+    let tags = || vec!["a".to_string(), "b".to_string()];
+
+    let derived = DerivedTags {
+        id: 3,
+        tags: tags(),
+    };
+    let hand = HandTags {
+        id: 3,
+        tags: tags(),
+    };
+
+    assert_eq!(
+        hex::encode(hand.to_bytes().unwrap()),
+        hex::encode(derived.to_bytes().unwrap())
+    );
+}
+
+#[test]
+fn test_derive_with_layout_declares_signature() {
+    let class = DerivedTags::class();
+    let sigs: Vec<String> = class
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
+    // `with` fields are always in the object group, so the declared signature is what orders them
+    assert_eq!(vec!["I", "[Ljava/lang/String;"], sigs);
+}
+
+// ---- with = "..." combined with Option<T> ----
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.OptionalTags", serial_version_uid = 12)]
+struct OptionalTags {
+    id: i32,
+    #[java(signature = "[Ljava/lang/String;", with = "StringArray")]
+    tags: Option<Vec<String>>,
+}
+
+#[test]
+fn test_derive_with_layout_option_some_matches_handwritten() {
+    let derived = OptionalTags {
+        id: 3,
+        tags: Some(vec!["a".to_string(), "b".to_string()]),
+    };
+    let hand = HandTags {
+        id: 3,
+        tags: vec!["a".to_string(), "b".to_string()],
+    };
+
+    // `OptionalTags` and `HandTags` are different classes, so only the shared value-side tail
+    // (the `id` int followed by the string-array contents) is expected to match. `7870` is
+    // `TC_ENDBLOCKDATA` (closes the classdesc's annotation block) followed by `TC_NULL` (there
+    // is no superclass) — it appears exactly once, right where the field values begin.
+    let derived_hex = hex::encode(derived.to_bytes().unwrap());
+    let hand_hex = hex::encode(hand.to_bytes().unwrap());
+    let derived_tail = &derived_hex[derived_hex.rfind("7870").unwrap()..];
+    let hand_tail = &hand_hex[hand_hex.rfind("7870").unwrap()..];
+    assert_eq!(hand_tail, derived_tail);
+}
+
+#[test]
+fn test_derive_with_layout_option_none_writes_null() {
+    let derived = OptionalTags { id: 3, tags: None };
+    let hex = hex::encode(derived.to_bytes().unwrap());
+    // TC_NULL (0x70) in place of the array, right after the int field's 4 bytes.
+    assert!(hex.ends_with("0000000370"), "unexpected tail: {hex}");
+}

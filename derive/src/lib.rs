@@ -16,6 +16,10 @@ use syn::{DeriveInput, parse_macro_input};
 ///     address_alias: Address,
 ///     #[java(skip)]
 ///     cache: HashMap<String, String>,
+///     // Value written by the `Layout` impl instead of the built-in type mapping;
+///     // `signature` is required because it cannot be derived from a `Layout`.
+///     #[java(signature = "Ljava/util/List;", with = "serde_java_ext::ArrayList")]
+///     tags: Vec<String>,
 /// }
 /// ```
 #[proc_macro_derive(JavaSerialize, attributes(java))]

@@ -137,6 +137,20 @@ check "primitive signature override" \
 struct A { #[java(signature = "I")] x: i32 }
 '
 
+check "with without signature" \
+    'requires an explicit `#[java(signature = "...")]`' '
+#[derive(JavaSerialize)]
+#[java(class = "com.example.A", serial_version_uid = 1)]
+struct A { #[java(with = "MyLayout")] x: Vec<String> }
+'
+
+check "with a malformed path" \
+    'expected identifier' '
+#[derive(JavaSerialize)]
+#[java(class = "com.example.A", serial_version_uid = 1)]
+struct A { #[java(signature = "Ljava/util/List;", with = "1not::a::path")] x: Vec<String> }
+'
+
 check "duplicate java field name" \
     'duplicate Java field name' '
 #[derive(JavaSerialize)]

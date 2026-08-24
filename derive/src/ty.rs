@@ -212,13 +212,19 @@ fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
     }
 
     Ok(match name.as_str() {
-        "u8" => JavaTy::PrimArray("byte_array", "write_byte_array"),
+        "bool" => JavaTy::PrimArray("boolean_array", "write_boolean_array"),
+        "i8" => JavaTy::PrimArray("byte_array", "write_i8_array"),
         "i16" => JavaTy::PrimArray("short_array", "write_short_array"),
         "i32" => JavaTy::PrimArray("int_array", "write_int_array"),
-        "i64" => JavaTy::PrimArray("long_array", "write_long_array"),
+        "i64" | "isize" => JavaTy::PrimArray("long_array", "write_long_array"),
+        "u8" => JavaTy::PrimArray("byte_array", "write_byte_array"),
+        "u16" => JavaTy::PrimArray("short_array", "write_u16_array"),
+        "u32" => JavaTy::PrimArray("int_array", "write_u32_array"),
+        "u64" | "usize" => JavaTy::PrimArray("long_array", "write_u64_array"),
         "f32" => JavaTy::PrimArray("float_array", "write_float_array"),
         "f64" => JavaTy::PrimArray("double_array", "write_double_array"),
-        "String" | "str" | "bool" | "u16" | "char" => {
+        "String" | "str" => JavaTy::PrimArray("string_array", "write_string_array"),
+        "char" => {
             return Err(syn::Error::new(
                 orig.span(),
                 format!(
@@ -227,14 +233,7 @@ fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
                 ),
             ));
         }
-        "i8" => {
-            return Err(syn::Error::new(
-                orig.span(),
-                "`i8` arrays are not supported because `ObjectWriter::write_byte_array` needs \
-                 `&[u8]`; use `u8` instead",
-            ));
-        }
-        "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {
+        "i128" | "u128" => {
             return Err(syn::Error::new(
                 orig.span(),
                 format!("`{name}` has no Java equivalent"),

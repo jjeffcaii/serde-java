@@ -264,10 +264,21 @@ impl<W: io::Write> ObjectWriter<W> {
         self.write_primitive_array(&class, data, |w, it| w.write_byte(*it))
     }
 
+    pub fn write_i8_array(&mut self, data: &[i8]) -> io::Result<u32> {
+        let class = Class::class_of_byte_array();
+        self.write_primitive_array(&class, data, |w, it| w.write_byte(*it as u8))
+    }
+
     #[inline]
     pub fn write_short_array(&mut self, data: &[i16]) -> io::Result<u32> {
         let class = Class::class_of_short_array();
         self.write_primitive_array(&class, data, |w, it| w.write_short(*it))
+    }
+
+    #[inline]
+    pub fn write_u16_array(&mut self, data: &[u16]) -> io::Result<u32> {
+        let class = Class::class_of_short_array();
+        self.write_primitive_array(&class, data, |w, it| w.write_short(*it as i16))
     }
 
     #[inline]
@@ -277,9 +288,21 @@ impl<W: io::Write> ObjectWriter<W> {
     }
 
     #[inline]
+    pub fn write_u32_array(&mut self, data: &[u32]) -> io::Result<u32> {
+        let class = Class::class_of_int_array();
+        self.write_primitive_array(&class, data, |w, it| w.write_int(*it as i32))
+    }
+
+    #[inline]
     pub fn write_long_array(&mut self, data: &[i64]) -> io::Result<u32> {
         let class = Class::class_of_long_array();
         self.write_primitive_array(&class, data, |w, it| w.write_long(*it))
+    }
+
+    #[inline]
+    pub fn write_u64_array(&mut self, data: &[u64]) -> io::Result<u32> {
+        let class = Class::class_of_long_array();
+        self.write_primitive_array(&class, data, |w, it| w.write_long(*it as i64))
     }
 
     #[inline]
@@ -292,6 +315,17 @@ impl<W: io::Write> ObjectWriter<W> {
     pub fn write_double_array(&mut self, data: &[f64]) -> io::Result<u32> {
         let class = Class::class_of_double_array();
         self.write_primitive_array(&class, data, |w, it| w.write_double(*it))
+    }
+
+    #[inline]
+    pub fn write_string_array(&mut self, data: &[String]) -> io::Result<u32> {
+        let size = data.len();
+        let h = self.begin_array(&Class::class_of_string_array(), size)?;
+
+        for next in data {
+            self.write_string(next)?;
+        }
+        Ok(h)
     }
 
     pub fn begin_array(&mut self, class: &Class, size: usize) -> io::Result<u32> {

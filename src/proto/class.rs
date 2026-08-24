@@ -395,7 +395,7 @@ impl Class {
 
     pub fn class_of_string_array() -> Class {
         static CLASS: Lazy<Class> = Lazy::new(|| {
-            Class::builder("[Ljava/lang/String;", -5921575005990323385)
+            Class::builder("[Ljava.lang.String;", -5921575005990323385)
                 .signature("[Ljava/lang/String;")
                 .build()
         });
@@ -531,12 +531,14 @@ mod tests {
         init();
 
         // declaration order of examples/example.java
-        let mut fields = [Field::builder("id").long(),
+        let mut fields = [
+            Field::builder("id").long(),
             Field::builder("name").string(),
             Field::builder("age").int(),
             Field::builder("addresses").array("Lcom/example/Address;"),
             Field::builder("ext1").object("java.util.Map"),
-            Field::builder("ext2").object("java.util.Map")];
+            Field::builder("ext2").object("java.util.Map"),
+        ];
         fields.sort();
 
         let actual: Vec<&str> = fields.iter().map(Field::name).collect();

@@ -1,5 +1,5 @@
 use syn::spanned::Spanned;
-use syn::{Attribute, Expr, ExprLit, ExprUnary, Field, Lit, LitStr, UnOp};
+use syn::{Attribute, Expr, ExprLit, ExprUnary, Field, Lit, LitStr, Path, UnOp};
 
 pub struct ContainerAttr {
     pub class: String,
@@ -10,6 +10,9 @@ pub struct FieldAttr {
     pub rename: Option<String>,
     pub skip: bool,
     pub signature: Option<String>,
+    /// Set by `#[java(with = "...")]`: a type implementing `serde_java::Layout`
+    /// that takes over the value side of this field.
+    pub with: Option<Path>,
 }
 
 pub fn parse_container(attrs: &[Attribute], span: proc_macro2::Span) -> syn::Result<ContainerAttr> {
@@ -60,6 +63,7 @@ pub fn parse_field(field: &Field) -> syn::Result<FieldAttr> {
         rename: None,
         skip: false,
         signature: None,
+        with: None,
     };
 
     for attr in field.attrs.iter().filter(|a| a.path().is_ident("java")) {
@@ -83,9 +87,15 @@ pub fn parse_field(field: &Field) -> syn::Result<FieldAttr> {
                 }
                 out.signature = Some(v);
                 Ok(())
+            } else if meta.path.is_ident("with") {
+                let s: LitStr = meta.value()?.parse()?;
+                // Spans point inside the literal, so a malformed path is reported there.
+                out.with = Some(s.parse()?);
+                Ok(())
             } else {
                 Err(meta.error(
-                    "unknown `java` field attribute; expected `rename`, `skip` or `signature`",
+                    "unknown `java` field attribute; expected `rename`, `skip`, `signature` or \
+                     `with`",
                 ))
             }
         })?;

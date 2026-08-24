@@ -1,6 +1,7 @@
 use serde_java::__private::Lazy;
 use serde_java::{
-    Class, Extends, ExtendsLayout, Field, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter,
+    Class, Extends, ExtendsLayout, Field, JavaObject, JavaSerializable, JavaWriteable, Layout,
+    ObjectWriter,
 };
 use std::{fmt, io};
 
@@ -69,6 +70,16 @@ macro_rules! define_number {
         impl From<$prim> for $name {
             fn from(value: $prim) -> Self {
                 Self($inner(value).extends(Number::default()))
+            }
+        }
+
+        impl<'a> Layout<'a> for $name {
+            type Input = $prim;
+            type Output = $name;
+
+            fn layout(input: &'a Self::Input) -> Self::Output {
+                let extends = $inner(*input).extends(Number::default());
+                Self(extends)
             }
         }
 

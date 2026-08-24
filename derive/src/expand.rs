@@ -3,16 +3,47 @@ use crate::ty::{self, JavaTy};
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{Data, DataStruct, DeriveInput, Fields, GenericParam};
+use syn::{Data, DataStruct, DeriveInput, Fields, GenericParam, Path, Type};
 
 struct Resolved {
     java_name: String,
     access: TokenStream,
-    ty: JavaTy,
-    /// Set by `#[java(signature = "...")]`; overrides the schema side only.
-    signature: Option<String>,
+    ser: FieldSer,
+    /// The `FieldBuilder` call chained onto `Field::builder(name)`.
+    method: TokenStream,
     is_primitive: bool,
     span: Span,
+}
+
+/// How a field's *value* is written.
+enum FieldSer {
+    /// Straight through the Rust -> Java mapping table.
+    Mapped(JavaTy),
+    /// Through `#[java(with = "...")]`'s `Layout` impl. `is_option` means the field's Rust
+    /// type is `Option<T>`, where `T` (not `Option<T>`) is the `Layout`'s `Input`: `None`
+    /// writes `null`, `Some(v)` goes through `Layout::layout(v)` as usual.
+    With { path: Path, is_option: bool },
+}
+
+/// If `ty` is `Option<T>`, returns `T`. Used only to decide null-handling for `with` fields —
+/// `T` itself is never resolved against the mapping table, since a `with` field's Rust type
+/// only has to match the `Layout`'s `Input`.
+fn peel_option(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    let seg = p.path.segments.last()?;
+    if seg.ident != "Option" {
+        return None;
+    }
+    ty::single_generic_arg(ty, seg).ok()
+}
+
+/// The `FieldBuilder` call for an explicit `#[java(signature = "...")]`.
+fn signature_method(sig: &str) -> TokenStream {
+    match sig.strip_prefix('[') {
+        // `FieldBuilder::array` prepends `[` itself, so strip the one the user wrote.
+        Some(stripped) => quote!(.array(#stripped)),
+        None => quote!(.object(#sig)),
+    }
 }
 
 pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -69,19 +100,47 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
             .rename
             .clone()
             .unwrap_or_else(|| ident.to_string().trim_start_matches("r#").to_string());
-        let jty = ty::resolve(&f.ty)?;
-        if fa.signature.is_some() && jty.is_primitive() {
-            return Err(syn::Error::new(
-                f.ty.span(),
-                "`signature` cannot be applied to a primitive field",
-            ));
-        }
+        // `with` replaces the mapping table entirely: the field's Rust type is whatever the
+        // `Layout` impl accepts as its `Input`, so it is not resolved here — which also means
+        // the Java-side type has to be spelled out.
+        let (ser, is_primitive, method) = match fa.with {
+            Some(path) => {
+                let Some(sig) = &fa.signature else {
+                    return Err(syn::Error::new(
+                        path.span(),
+                        "`with` requires an explicit `#[java(signature = \"...\")]`: the Java \
+                         field type cannot be derived from a `Layout` impl",
+                    ));
+                };
+                let is_option = peel_option(&f.ty).is_some();
+                (
+                    FieldSer::With { path, is_option },
+                    false,
+                    signature_method(sig),
+                )
+            }
+            None => {
+                let jty = ty::resolve(&f.ty)?;
+                if fa.signature.is_some() && jty.is_primitive() {
+                    return Err(syn::Error::new(
+                        f.ty.span(),
+                        "`signature` cannot be applied to a primitive field",
+                    ));
+                }
+                let method = match &fa.signature {
+                    Some(sig) => signature_method(sig),
+                    None => jty.field_method(),
+                };
+                let is_primitive = jty.is_primitive();
+                (FieldSer::Mapped(jty), is_primitive, method)
+            }
+        };
         resolved.push(Resolved {
             java_name,
             access: quote!(self.#ident),
-            is_primitive: jty.is_primitive(),
-            ty: jty,
-            signature: fa.signature,
+            is_primitive,
+            ser,
+            method,
             span: f.span(),
         });
     }
@@ -111,35 +170,62 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut write_stmts: Vec<TokenStream> = Vec::new();
     let mut array_statics: Vec<TokenStream> = Vec::new();
 
+    let mut uses_layout = false;
+
     for (idx, r) in resolved.iter().enumerate() {
         let name = &r.java_name;
-        let method = match &r.signature {
-            // `FieldBuilder::array` prepends `[` itself, so strip the one the user wrote.
-            Some(sig) if sig.starts_with('[') => {
-                let stripped = &sig[1..];
-                quote!(.array(#stripped))
-            }
-            Some(sig) => quote!(.object(#sig)),
-            None => r.ty.field_method(),
-        };
+        let method = &r.method;
         field_calls.push(quote!(
             .field(::serde_java::Field::builder(#name)#method)
         ));
 
-        let array_class = r.ty.obj_array_elem().map(|elem| {
-            let id = Ident::new(&format!("__ARRAY_CLASS_{idx}"), Span::call_site());
-            array_statics.push(quote!(
-                static #id: Lazy<::serde_java::Class> = Lazy::new(|| {
-                    ::serde_java::Class::class_of_array(
-                        &<#elem as ::serde_java::JavaObject>::class(),
+        match &r.ser {
+            FieldSer::Mapped(ty) => {
+                let array_class = ty.obj_array_elem().map(|elem| {
+                    let id = Ident::new(&format!("__ARRAY_CLASS_{idx}"), Span::call_site());
+                    array_statics.push(quote!(
+                        static #id: Lazy<::serde_java::Class> = Lazy::new(|| {
+                            ::serde_java::Class::class_of_array(
+                                &<#elem as ::serde_java::JavaObject>::class(),
+                            )
+                        });
+                    ));
+                    id
+                });
+                write_stmts.push(ty.write_stmts(&r.access, array_class.as_ref()));
+            }
+            FieldSer::With { path, is_option } => {
+                uses_layout = true;
+                let access = &r.access;
+                // `#path` is generic in the general case (`ArrayList<'a, T>`), so its
+                // parameters are left to inference rather than spelled out.
+                write_stmts.push(if *is_option {
+                    quote!(
+                        match &#access {
+                            ::std::option::Option::Some(__v) => {
+                                ::serde_java::JavaWriteable::write_to(&#path::layout(__v), w)?;
+                            }
+                            ::std::option::Option::None => {
+                                w.write_null()?;
+                            }
+                        }
+                    )
+                } else {
+                    quote!(
+                        ::serde_java::JavaWriteable::write_to(&#path::layout(&#access), w)?;
                     )
                 });
-            ));
-            id
-        });
-
-        write_stmts.push(r.ty.write_stmts(&r.access, array_class.as_ref()));
+            }
+        }
     }
+
+    // Brought into scope only when needed, so that `#path::layout(..)` resolves to the trait
+    // method; an unconditional import would warn on every other derive.
+    let layout_import = uses_layout.then(|| {
+        quote!(
+            use ::serde_java::Layout as _;
+        )
+    });
 
     // A struct whose fields are all `skip`ped writes nothing, which would leave `w` unused.
     let w = if write_stmts.is_empty() {
@@ -156,6 +242,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     Ok(quote! {
         const _: () = {
             use ::serde_java::__private::Lazy;
+            #layout_import
 
             static CLASS: Lazy<::serde_java::Class> = Lazy::new(|| {
                 ::serde_java::Class::builder(#class_name, #suid)

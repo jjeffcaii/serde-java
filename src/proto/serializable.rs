@@ -1,6 +1,7 @@
 use super::class::Class;
 use super::object::Object;
 use super::writer::ObjectWriter;
+use std::collections::VecDeque;
 use std::io;
 
 pub trait JavaObject {
@@ -182,7 +183,7 @@ impl JavaWriteable for [f64] {
     }
 }
 
-impl JavaWriteable for Vec<String> {
+impl JavaWriteable for [String] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         w.begin_array(&Class::class_of_string_array(), self.len())?;
         for next in self {
@@ -203,6 +204,21 @@ where
 
         obj.write_to(w)?;
 
+        Ok(())
+    }
+}
+
+impl<T> JavaWriteable for VecDeque<T>
+where
+    T: JavaSerializable + JavaObject,
+{
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let class = Class::class_of_array(&T::class());
+        w.begin_array(&class, self.len())?;
+
+        for next in self {
+            next.write_to(w)?;
+        }
         Ok(())
     }
 }
