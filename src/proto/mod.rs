@@ -17,6 +17,7 @@ mod tests {
     use anyhow::Result;
     use once_cell::sync::Lazy;
     use std::io;
+    use std::io::Write;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -356,6 +357,48 @@ mod tests {
             "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65740015454e43525950545f66616b655f70617373776f72647702010078",
             hex::encode(&raw)
         );
+
+        Ok(())
+    }
+
+    struct CharDemo {
+        ch: char,
+    }
+
+    impl JavaObject for CharDemo {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.CharDemo", -7957532738628518212)
+                    .field(Field::builder("ch").char())
+                    .build()
+            });
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for CharDemo {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+            w.write(self.ch)
+        }
+    }
+
+    #[test]
+    fn test_char_demo() -> Result<()> {
+        init();
+
+        // normal char 'a'
+        {
+            let o = CharDemo { ch: 'a' };
+            let raw = o.to_bytes()?;
+            assert_eq!(
+                "aced000573720014636f6d2e6578616d706c652e4368617244656d6f91912a2291817ebc020001430002636878700061",
+                hex::encode(&raw)
+            );
+        }
+
+        // Emoji is outside BMP, will return an error
+        let o = CharDemo { ch: '😀' };
+        assert!(o.to_bytes().is_err());
 
         Ok(())
     }

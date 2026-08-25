@@ -195,6 +195,32 @@ where
     }
 }
 
+impl<W> Writer<char> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write(&mut self, input: char) -> io::Result<()> {
+        let mut buf = [0u16; 2];
+        let units = input.encode_utf16(&mut buf);
+        if units.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "character {:?} is outside the BMP and cannot be represented by a single Java char",
+                    input
+                ),
+            ));
+        }
+
+        if self.blkmode {
+            self.blk.write_u16::<BigEndian>(units[0])
+        } else {
+            self.put_u16(units[0])
+        }
+    }
+}
+
 impl<W> Writer<i8> for ObjectWriter<W>
 where
     W: io::Write,
@@ -303,6 +329,34 @@ where
             self.blk.write_u64::<BigEndian>(input)
         } else {
             self.put_u64(input)
+        }
+    }
+}
+
+impl<W> Writer<isize> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write(&mut self, input: isize) -> io::Result<()> {
+        if self.blkmode {
+            self.blk.write_i64::<BigEndian>(input as i64)
+        } else {
+            self.put_i64(input as i64)
+        }
+    }
+}
+
+impl<W> Writer<usize> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write(&mut self, input: usize) -> io::Result<()> {
+        if self.blkmode {
+            self.blk.write_u64::<BigEndian>(input as u64)
+        } else {
+            self.put_u64(input as u64)
         }
     }
 }

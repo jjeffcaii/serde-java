@@ -160,25 +160,20 @@ fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
 fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
     Ok(match name {
         "bool" => JavaTy::Prim("boolean", "write"),
+        "char" => JavaTy::Prim("char", "write"),
         "i8" | "u8" => JavaTy::Prim("byte", "write"),
         "i16" | "u16" => JavaTy::Prim("short", "write"),
         "i32" | "u32" => JavaTy::Prim("int", "write"),
-        "i64" | "u64" => JavaTy::Prim("long", "write"),
+        "i64" | "u64" | "isize" | "usize" => JavaTy::Prim("long", "write"),
         "f32" => JavaTy::Prim("float", "write"),
         "f64" => JavaTy::Prim("double", "write"),
         "String" | "str" => JavaTy::Str(false),
-        "char" => {
-            return Err(syn::Error::new(
-                orig.span(),
-                "Rust `char` is 4 bytes and does not match Java's 2-byte `char`; use `u16`",
-            ));
-        }
-        "usize" | "isize" | "i128" | "u128" => {
+        "i128" | "u128" => {
             return Err(syn::Error::new(
                 orig.span(),
                 format!(
                     "`{name}` has no Java equivalent; use one of \
-                     i8/u8/i16/u16/i32/u32/i64/u64/f32/f64"
+                     i8/u8/i16/u16/i32/u32/i64/u64/isize/usize/f32/f64"
                 ),
             ));
         }
