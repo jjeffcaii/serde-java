@@ -36,6 +36,7 @@ type BlockData = SmallVec<[u8; 32]>;
 pub struct ObjectWriter<W> {
     w: W,
     next_handle: u32,
+    pub(crate) object_handles: HashMap<usize, u32>,
     string_handles: HashMap<String, u32>,
     class_handles: HashMap<AtomString, u32>,
     blkmode: bool,
@@ -107,6 +108,7 @@ impl<W: io::Write> ObjectWriter<W> {
         Ok(Self {
             w,
             next_handle: BASE_WIRE_HANDLE,
+            object_handles: HashMap::new(),
             string_handles: Default::default(),
             class_handles: Default::default(),
             blkmode: true,
@@ -126,6 +128,7 @@ impl<W: io::Write> ObjectWriter<W> {
     {
         let mut erased = ObjectWriter {
             next_handle: self.next_handle,
+            object_handles: std::mem::take(&mut self.object_handles),
             string_handles: std::mem::take(&mut self.string_handles),
             class_handles: std::mem::take(&mut self.class_handles),
             w: &mut self.w as &mut dyn io::Write,
@@ -136,6 +139,7 @@ impl<W: io::Write> ObjectWriter<W> {
         let r = f(&mut erased);
 
         self.next_handle = erased.next_handle;
+        self.object_handles = std::mem::take(&mut erased.object_handles);
         self.string_handles = std::mem::take(&mut erased.string_handles);
         self.class_handles = std::mem::take(&mut erased.class_handles);
         self.blk = std::mem::take(&mut erased.blk);
@@ -144,26 +148,17 @@ impl<W: io::Write> ObjectWriter<W> {
     }
 
     #[inline]
-    fn alloc_handle(&mut self) -> u32 {
+    pub(crate) fn alloc_handle(&mut self) -> u32 {
         let h = self.next_handle;
         self.next_handle += 1;
         h
     }
 
     #[inline]
-    fn write_reference(&mut self, handle: u32) -> io::Result<()> {
+    pub(crate) fn write_reference(&mut self, handle: u32) -> io::Result<()> {
         self.put_u8(TC_REFERENCE)?;
         self.put_u32(handle)?;
         Ok(())
-    }
-
-    #[inline]
-    pub fn write_char(&mut self, v: u16) -> io::Result<()> {
-        if self.blkmode {
-            self.blk.write_u16::<BigEndian>(v)
-        } else {
-            self.put_u16(v)
-        }
     }
 }
 

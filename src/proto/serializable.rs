@@ -1,6 +1,7 @@
 use super::class::Class;
 use super::object::Object;
 use super::writer::{ArrayWriter, ObjectWriter, Writer};
+use crate::proto::reference::Reference;
 use std::io;
 
 pub trait JavaObject {
@@ -275,6 +276,32 @@ where
         let class = Self::class();
 
         let obj = Object::<T, ()>::builder(class).this(self).build();
+
+        obj.write_to(w)?;
+
+        Ok(())
+    }
+}
+
+impl<T> JavaWriteable for Reference<T>
+where
+    T: JavaSerializable + JavaObject,
+{
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let key = self.key();
+
+        if let Some(h) = w.object_handles.get(&key) {
+            return w.write_reference(*h);
+        }
+
+        let class = T::class();
+
+        let borrowed = self.0.borrow();
+
+        let obj = Object::<T, ()>::builder(class)
+            .key(key)
+            .this(&borrowed)
+            .build();
 
         obj.write_to(w)?;
 

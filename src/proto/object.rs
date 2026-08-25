@@ -12,6 +12,7 @@ pub struct Object<'a, T, P> {
     class: Class,
     instance: Option<&'a T>,
     super_instance: Option<&'a P>,
+    key: Option<usize>,
 }
 
 pub struct ObjectBuilder<'a, T, P> {
@@ -21,6 +22,11 @@ pub struct ObjectBuilder<'a, T, P> {
 impl<'a, T, P> ObjectBuilder<'a, T, P> {
     pub fn extends(mut self, parent: &'a P) -> Self {
         self.inner.super_instance.replace(parent);
+        self
+    }
+
+    pub fn key(mut self, key: usize) -> Self {
+        self.inner.key.replace(key);
         self
     }
 
@@ -42,6 +48,7 @@ impl<'a, I, P> Object<'a, I, P> {
                 class,
                 instance: None,
                 super_instance: None,
+                key: None,
             },
         }
     }
@@ -66,7 +73,11 @@ impl<'a, I, P> Object<'a, I, P> {
     {
         let old = w.set_block_data_mode(true);
 
-        w.begin_object(&self.class)?;
+        let h = w.begin_object(&self.class)?;
+
+        if let Some(k) = &self.key {
+            w.object_handles.insert(*k, h);
+        }
 
         if let Some(p) = &self.super_instance {
             w.with_dyn(|w| p.write_object(w))?;
