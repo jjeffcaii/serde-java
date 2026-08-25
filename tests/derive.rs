@@ -102,7 +102,7 @@ fn test_derive_all_scalar_types() {
             "Z",
             "B",
             "B",
-            "C",
+            "S",
             "S",
             "I",
             "J",

@@ -7,8 +7,9 @@ use syn::{GenericArgument, PathArguments, Type, TypePath};
 pub enum JavaTy {
     /// A JVM primitive: (`FieldBuilder` method, `ObjectWriter` method).
     Prim(&'static str, &'static str),
-    /// `java.lang.String`.
-    Str,
+    /// `java.lang.String`. `true` when the Rust field is `&str` (already a reference), so
+    /// `write_stmts` must not take another `&` of it.
+    Str(bool),
     /// Anything else — assumed to implement `JavaObject`.
     Object(Type),
     /// `Option<T>` where `T` is not a primitive.
@@ -40,7 +41,7 @@ impl JavaTy {
                 let m = Ident::new(method, Span::call_site());
                 quote!(.#m())
             }
-            JavaTy::Str => quote!(.string()),
+            JavaTy::Str(_) => quote!(.string()),
             JavaTy::Object(t) => quote!(
                 .object(<#t as ::serde_java::JavaObject>::class().signature())
             ),
@@ -64,7 +65,13 @@ impl JavaTy {
                 let m = Ident::new(method, Span::call_site());
                 quote!(w.#m(#access)?;)
             }
-            JavaTy::Str => quote!(w.write(&#access)?;),
+            JavaTy::Str(is_ref) => {
+                if *is_ref {
+                    quote!(w.write(#access)?;)
+                } else {
+                    quote!(w.write(&#access)?;)
+                }
+            }
             JavaTy::Object(t) => quote!(
                 <#t as ::serde_java::JavaWriteable>::write_to(&#access, w)?;
             ),
@@ -98,7 +105,8 @@ pub fn resolve(ty: &Type) -> syn::Result<JavaTy> {
         Type::Reference(r) => {
             let inner = resolve(&r.elem)?;
             match inner {
-                JavaTy::Str | JavaTy::PrimArray(..) => Ok(inner),
+                JavaTy::Str(_) => Ok(JavaTy::Str(true)),
+                JavaTy::PrimArray(..) => Ok(inner),
                 _ => Err(syn::Error::new(
                     ty.span(),
                     "reference fields are only supported for `&str` and primitive slices \
@@ -158,7 +166,7 @@ fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
         "i64" | "u64" => JavaTy::Prim("long", "write"),
         "f32" => JavaTy::Prim("float", "write"),
         "f64" => JavaTy::Prim("double", "write"),
-        "String" | "str" => JavaTy::Str,
+        "String" | "str" => JavaTy::Str(false),
         "char" => {
             return Err(syn::Error::new(
                 orig.span(),
