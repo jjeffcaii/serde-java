@@ -1,4 +1,5 @@
 use crate::util::to_modified_utf8;
+use sha1::{Digest, Sha1};
 
 pub const PUBLIC: i32 = 0x0001;
 pub const PRIVATE: i32 = 0x0002;
@@ -35,8 +36,6 @@ pub struct ClassMetadata<'a> {
     pub constructors: Vec<MethodSig<'a>>, // name is always "<init>"; descriptor is required
     pub methods: Vec<MethodSig<'a>>,  // constructors excluded
 }
-
-use sha1::{Digest, Sha1};
 
 pub fn compute_default_suid(meta: &ClassMetadata) -> i64 {
     let mut buf: Vec<u8> = Vec::new();

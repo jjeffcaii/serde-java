@@ -6,6 +6,7 @@ extern crate log;
 
 mod boolean;
 mod character;
+mod date;
 mod list;
 mod map;
 mod misc;
@@ -14,6 +15,7 @@ mod throwable;
 
 pub use boolean::Boolean;
 pub use character::Character;
+pub use date::Date;
 pub use list::{ArrayList, LinkedList};
 pub use map::HashMap;
 pub use number::{Byte, Double, Float, Integer, Long, Short};

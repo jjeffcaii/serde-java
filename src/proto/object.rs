@@ -64,6 +64,8 @@ impl<'a, I, P> Object<'a, I, P> {
         P: JavaSerializable,
         I: JavaSerializable,
     {
+        let old = w.set_block_data_mode(true);
+
         w.begin_object(&self.class)?;
 
         if let Some(p) = &self.super_instance {
@@ -77,6 +79,8 @@ impl<'a, I, P> Object<'a, I, P> {
         if self.class.flags().contains(ClassFlags::WRITE_METHOD) {
             w.end()?;
         }
+
+        w.set_block_data_mode(old);
 
         Ok(())
     }

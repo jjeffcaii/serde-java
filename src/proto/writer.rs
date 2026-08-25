@@ -783,7 +783,9 @@ impl<W: io::Write> ObjectWriter<W> {
         self.put_u8(TC_ENDBLOCKDATA)
     }
 
-    pub(crate) fn set_block_data_mode(&mut self, enabled: bool) {
+    pub(crate) fn set_block_data_mode(&mut self, enabled: bool) -> bool {
+        let old = self.blkmode;
         self.blkmode = enabled;
+        old
     }
 }
