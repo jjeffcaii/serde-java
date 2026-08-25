@@ -14,11 +14,9 @@ pub use writer::ObjectWriter;
 mod tests {
     use super::*;
 
-    use crate::proto::object::Object;
     use anyhow::Result;
     use once_cell::sync::Lazy;
     use std::io;
-    use std::io::Write;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -43,7 +41,7 @@ mod tests {
     }
 
     impl JavaSerializable for Demo {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.i)?;
             w.write_string(&self.message)?;
             Ok(())
@@ -92,7 +90,7 @@ mod tests {
     }
 
     impl JavaSerializable for Order {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write_int(self.id)?;
             self.address.write_to(w)?;
             Ok(())
@@ -103,19 +101,31 @@ mod tests {
     fn test_string() -> Result<()> {
         init();
 
-        let mut b: Vec<u8> = vec![];
-        let mut w = ObjectWriter::new(&mut b)?;
+        fn check(origin: &str, expect: &str) -> Result<()> {
+            let mut b: Vec<u8> = vec![];
+            let mut w = ObjectWriter::new(&mut b)?;
 
-        let origin = "Hello 世界!";
+            w.write_string(origin)?;
 
-        w.write_string(origin)?;
+            let actual = hex::encode(&b);
 
-        let actual = hex::encode(&b);
+            info!("{}: {}", origin, actual);
 
-        info!("{}: {}", origin, actual);
+            assert_eq!(expect, &actual);
+            Ok(())
+        }
 
-        let expect_java = "aced000574000d48656c6c6f20e4b896e7958c21";
-        assert_eq!(expect_java, &actual);
+        // simple
+        check("Hello World!", "aced000574000c48656c6c6f20576f726c6421")?;
+
+        // with CJK
+        check("Hello 世界!", "aced000574000d48656c6c6f20e4b896e7958c21")?;
+
+        // with emoji
+        check(
+            "I♥️みかみゆあ!",
+            "aced000574001749e299a5efb88fe381bfe3818be381bfe38286e3818221",
+        )?;
 
         Ok(())
     }
@@ -198,12 +208,12 @@ mod tests {
     }
 
     impl JavaSerializable for CustomPojo1 {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.username.write_to(w)?;
             Ok(())
         }
 
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.default_write_object(w)?;
 
             self.admin.write_to(w)?;
@@ -255,12 +265,12 @@ mod tests {
     }
 
     impl JavaSerializable for CustomPojo2 {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.username.write_to(w)?;
             Ok(())
         }
 
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.default_write_object(w)?;
 
             self.admin.write_to(w)?;
@@ -312,12 +322,12 @@ mod tests {
     }
 
     impl JavaSerializable for CustomPojo3 {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.username.write_to(w)?;
             Ok(())
         }
 
-        fn write_object(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             self.default_write_object(w)?;
 
             let enc_password = format!("ENCRYPT_{}", self.password);
