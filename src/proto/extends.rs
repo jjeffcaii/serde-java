@@ -18,6 +18,7 @@ where
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ExtendsLayout<T, P> {
     this: T,
     parent: P,

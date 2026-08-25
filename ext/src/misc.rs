@@ -1,5 +1,6 @@
 use super::boolean::Boolean;
 use super::number::{Byte, Double, Float, Integer, Long, Short};
+use crate::Character;
 use serde_java::{JavaWriteable, Layout, ObjectWriter};
 use std::any::Any;
 use std::io;
@@ -13,6 +14,9 @@ pub(crate) fn write_boxed<T: 'static + JavaWriteable>(
 ) -> io::Result<()> {
     if let Some(i) = (t as &dyn Any).downcast_ref::<bool>() {
         return Boolean::layout(i).write_to(w);
+    }
+    if let Some(i) = (t as &dyn Any).downcast_ref::<char>() {
+        return Character::layout(i).write_to(w);
     }
     if let Some(i) = (t as &dyn Any).downcast_ref::<i8>() {
         return Byte::layout(i).write_to(w);

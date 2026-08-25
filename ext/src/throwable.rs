@@ -1,7 +1,7 @@
 use serde_java::__private::Lazy;
 use serde_java::{
-    ArrayWriter, Class, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable,
-    ObjectWriter, Writer, util::compute_signature,
+    Class, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable, ObjectWriter, Writer,
+    util::compute_signature,
 };
 use std::io;
 use std::sync::Arc;

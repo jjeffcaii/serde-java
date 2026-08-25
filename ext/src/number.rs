@@ -8,7 +8,7 @@ use std::{fmt, io};
 static CLASS_OF_NUMBER: Lazy<Class> =
     Lazy::new(|| Class::builder("java.lang.Number", -8742448824652078965).build());
 
-#[derive(Default)]
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct Number;
 
 impl JavaObject for Number {
@@ -24,7 +24,7 @@ impl JavaSerializable for Number {
 }
 
 macro_rules! define_number {
-    ($name:ident, $inner:ident, $class:ident, $prim:ty, $java_class:expr, $suid:expr, $field:ident) => {
+    ($name:ident, $inner:ident, $class:ident, $prim:ty, $java_class:expr, $suid:expr, $field:ident $(, $extra:ident)*) => {
         static $class: Lazy<Class> = Lazy::new(|| {
             Class::builder($java_class, $suid)
                 .super_class(Clone::clone(&CLASS_OF_NUMBER))
@@ -32,6 +32,7 @@ macro_rules! define_number {
                 .build()
         });
 
+        #[derive(Copy, Clone, PartialEq $(, $extra)*)]
         pub struct $name(ExtendsLayout<$inner, Number>);
 
         impl JavaObject for $name {
@@ -83,6 +84,7 @@ macro_rules! define_number {
             }
         }
 
+        #[derive(Copy, Clone, PartialEq $(, $extra)*)]
         struct $inner($prim);
 
         impl JavaObject for $inner {
@@ -106,7 +108,9 @@ define_number!(
     i8,
     "java.lang.Byte",
     -7183698231559129828,
-    byte
+    byte,
+    Eq,
+    Hash
 );
 
 define_number!(
@@ -116,7 +120,9 @@ define_number!(
     i16,
     "java.lang.Short",
     7515723908773894738,
-    short
+    short,
+    Eq,
+    Hash
 );
 
 define_number!(
@@ -126,7 +132,9 @@ define_number!(
     i32,
     "java.lang.Integer",
     1360826667806852920,
-    int
+    int,
+    Eq,
+    Hash
 );
 
 define_number!(
@@ -136,7 +144,9 @@ define_number!(
     i64,
     "java.lang.Long",
     4290774380558885855,
-    long
+    long,
+    Eq,
+    Hash
 );
 
 define_number!(
