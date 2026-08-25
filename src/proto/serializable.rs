@@ -161,6 +161,27 @@ impl JavaWriteable for f64 {
     }
 }
 
+impl JavaWriteable for [bool] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
+impl JavaWriteable for [char] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
+impl JavaWriteable for [i8] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
 impl JavaWriteable for [u8] {
     #[inline]
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
@@ -175,6 +196,13 @@ impl JavaWriteable for [i16] {
     }
 }
 
+impl JavaWriteable for [u16] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
 impl JavaWriteable for [i32] {
     #[inline]
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
@@ -182,7 +210,35 @@ impl JavaWriteable for [i32] {
     }
 }
 
+impl JavaWriteable for [u32] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
 impl JavaWriteable for [i64] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
+impl JavaWriteable for [u64] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
+impl JavaWriteable for [isize] {
+    #[inline]
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write_all(self)
+    }
+}
+
+impl JavaWriteable for [usize] {
     #[inline]
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         w.write_all(self)

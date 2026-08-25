@@ -429,6 +429,20 @@ where
     }
 }
 
+impl<W> ArrayWriter<char> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write_all(&mut self, input: &[char]) -> io::Result<()> {
+        self.begin_array(&Class::class_of_char_array(), input.len())?;
+        for next in input {
+            self.write(*next)?;
+        }
+        Ok(())
+    }
+}
+
 impl<W> ArrayWriter<u8> for ObjectWriter<W>
 where
     W: io::Write,
@@ -544,6 +558,36 @@ where
         self.begin_array(&Class::class_of_long_array(), size)?;
         for next in input {
             self.put_u64(*next)?;
+        }
+        Ok(())
+    }
+}
+
+impl<W> ArrayWriter<isize> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write_all(&mut self, input: &[isize]) -> io::Result<()> {
+        let size = input.len();
+        self.begin_array(&Class::class_of_long_array(), size)?;
+        for next in input {
+            self.put_i64(*next as i64)?;
+        }
+        Ok(())
+    }
+}
+
+impl<W> ArrayWriter<usize> for ObjectWriter<W>
+where
+    W: io::Write,
+{
+    #[inline]
+    fn write_all(&mut self, input: &[usize]) -> io::Result<()> {
+        let size = input.len();
+        self.begin_array(&Class::class_of_long_array(), size)?;
+        for next in input {
+            self.put_u64(*next as u64)?;
         }
         Ok(())
     }
