@@ -1,3 +1,4 @@
+use super::misc::write_boxed;
 use serde_java::__private::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
@@ -115,8 +116,8 @@ impl<'a, K, V> JavaObject for HashMap<'a, K, V> {
 
 impl<'a, K, V> JavaSerializable for HashMap<'a, K, V>
 where
-    K: JavaWriteable + Eq + Hash,
-    V: JavaWriteable,
+    K: 'static + JavaWriteable + Eq + Hash,
+    V: 'static + JavaWriteable,
 {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         let threshold = if self.threshold > 0 {
@@ -141,8 +142,8 @@ where
         size.write_to(w)?;
 
         for (k, v) in self.inner {
-            k.write_to(w)?;
-            v.write_to(w)?;
+            write_boxed(w, k)?;
+            write_boxed(w, v)?;
         }
 
         Ok(())
@@ -197,27 +198,37 @@ mod tests {
     #[java(class="com.example.HashMapDemo",serial_version_uid=-5707132217429457092)]
     struct HashMapDemo {
         #[java(signature = "Ljava/util/Map;", with = "crate::HashMap")]
-        exts: Option<std::collections::HashMap<String, String>>,
+        exts: Option<StdHashMap<String, String>>,
+        #[java(signature = "Ljava/util/Map;", with = "crate::HashMap")]
+        scores: StdHashMap<i32, f64>,
     }
 
     #[test]
-    fn test_hashmap_field() -> io::Result<()> {
+    fn test_hashmap_in_fields() -> io::Result<()> {
         init();
 
         let exts = {
-            let mut m = std::collections::HashMap::<String, String>::new();
+            let mut m = StdHashMap::<String, String>::new();
             m.insert("hello".to_string(), "world".to_string());
             m
         };
+        let scores = {
+            let mut m = StdHashMap::<i32, f64>::new();
+            m.insert(1, 3.14);
+            m
+        };
 
-        let input = HashMapDemo { exts: Some(exts) };
+        let input = HashMapDemo {
+            exts: Some(exts),
+            scores,
+        };
 
         info!("input: {:?}", input);
 
         let raw = input.to_bytes()?;
 
         assert_eq!(
-            "aced000573720017636f6d2e6578616d706c652e486173684d617044656d6fb0cc317c65ee073c0200014c00046578747374000f4c6a6176612f7574696c2f4d61703b7870737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c6478",
+            "aced000573720017636f6d2e6578616d706c652e486173684d617044656d6fb0cc317c65ee073c0200024c00046578747374000f4c6a6176612f7574696c2f4d61703b4c000673636f72657371007e00017870737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c64787371007e00033f4000000000000c77080000001000000001737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787000000001737200106a6176612e6c616e672e446f75626c6580b3c24a296bfb0402000144000576616c75657871007e000940091eb851eb851f78",
             hex::encode(&raw),
         );
 

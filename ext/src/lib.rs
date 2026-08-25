@@ -7,6 +7,7 @@ extern crate log;
 mod boolean;
 mod list;
 mod map;
+mod misc;
 mod number;
 mod throwable;
 

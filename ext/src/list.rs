@@ -1,3 +1,4 @@
+use super::misc::write_boxed;
 use serde_java::__private::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
@@ -52,7 +53,7 @@ impl<'a, T> JavaObject for LinkedList<'a, T> {
 
 impl<'a, T> JavaSerializable for LinkedList<'a, T>
 where
-    T: JavaWriteable,
+    T: 'static + JavaWriteable,
 {
     fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
@@ -64,8 +65,7 @@ where
         (self.0.len() as i32).write_to(w)?;
 
         for next in self.0 {
-            // TODO: convert primitive value to boxed
-            next.write_to(w)?;
+            write_boxed(w, next)?;
         }
 
         Ok(())
@@ -136,7 +136,7 @@ impl<'a, T> JavaObject for ArrayList<'a, T> {
 
 impl<'a, T> JavaSerializable for ArrayList<'a, T>
 where
-    T: JavaWriteable,
+    T: 'static + JavaWriteable,
 {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         (self.0.len() as i32).write_to(w)?;
@@ -149,8 +149,7 @@ where
         (self.0.len() as i32).write_to(w)?;
 
         for next in self.0 {
-            // TODO: convert primitive value to boxed
-            next.write_to(w)?
+            write_boxed(w, next)?;
         }
 
         Ok(())
@@ -202,15 +201,18 @@ mod tests {
         id: i32,
         #[java(signature = "Ljava/util/List;", with = "crate::LinkedList")]
         names: Vec<String>,
+        #[java(signature = "Ljava/util/List;", with = "crate::LinkedList")]
+        scores: Vec<f32>,
     }
 
     #[test]
-    fn test_linked_list_field() -> io::Result<()> {
+    fn test_linked_list_in_fields() -> io::Result<()> {
         init();
 
         let v = LinkedListDemo {
             id: -1,
             names: vec!["foo".into(), "bar".into(), "qux".into()],
+            scores: vec![1.1, 2.2, 3.3],
         };
 
         info!("{:?}", &v);
@@ -218,7 +220,7 @@ mod tests {
         let raw = v.to_bytes()?;
 
         assert_eq!(
-            "aced00057372001a636f6d2e6578616d706c652e4c696e6b65644c69737444656d6fd7c99192c561ddba02000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b7870ffffffff737200146a6176612e7574696c2e4c696e6b65644c6973740c29535d4a6088220300007870770400000003740003666f6f74000362617274000371757878",
+            "aced00057372001a636f6d2e6578616d706c652e4c696e6b65644c69737444656d6fd7c99192c561ddba02000349000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b4c000673636f72657371007e00017870ffffffff737200146a6176612e7574696c2e4c696e6b65644c6973740c29535d4a6088220300007870770400000003740003666f6f740003626172740003717578787371007e00037704000000037372000f6a6176612e6c616e672e466c6f6174daedc9a2db3cf0ec02000146000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b02000078703f8ccccd7371007e0009400ccccd7371007e00094053333378",
             hex::encode(&raw)
         );
 
@@ -253,47 +255,51 @@ mod tests {
 
     #[derive(Debug, JavaSerialize)]
     #[java(
-        class = "com.example.ListDemo",
+        class = "com.example.ArrayListDemo",
         serial_version_uid = 3153513349080412905
     )]
-    struct ListDemo {
+    struct ArrayListDemo {
         id: i32,
         #[java(signature = "Ljava/util/List;", with = "crate::ArrayList")]
         names: Option<Vec<String>>,
+        #[java(signature = "Ljava/util/List;", with = "crate::ArrayList")]
+        scores: Option<Vec<i32>>,
     }
 
     #[test]
-    fn test_list_demo() -> io::Result<()> {
+    fn test_array_list_in_fields() -> io::Result<()> {
         init();
 
         // check null names
         {
-            let l = ListDemo {
+            let l = ArrayListDemo {
                 id: 0xffff,
                 names: None,
+                scores: None,
             };
 
             info!("{:?}", &l);
 
             let raw = l.to_bytes()?;
             assert_eq!(
-                "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff70",
+                "aced000573720019636f6d2e6578616d706c652e41727261794c69737444656d6f2bc387aed663f2e902000349000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b4c000673636f72657371007e000178700000ffff7070",
                 hex::encode(&raw)
             );
         }
 
         // check non-null names
         {
-            let l = ListDemo {
+            let l = ArrayListDemo {
                 id: 0xffff,
                 names: Some(vec!["foo".into(), "bar".into(), "qux".into()]),
+                scores: Some(vec![1, 2, 3]),
             };
 
             info!("{:?}", &l);
 
             let raw = l.to_bytes()?;
             assert_eq!(
-                "aced000573720014636f6d2e6578616d706c652e4c69737444656d6f2bc387aed663f2e902000249000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b78700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f74000362617274000371757878",
+                "aced000573720019636f6d2e6578616d706c652e41727261794c69737444656d6f2bc387aed663f2e902000349000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b4c000673636f72657371007e000178700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f740003626172740003717578787371007e000300000003770400000003737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b0200007870000000017371007e0009000000027371007e00090000000378",
                 hex::encode(&raw)
             );
         }
