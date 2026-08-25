@@ -1,7 +1,7 @@
 use serde_java::__private::Lazy;
 use serde_java::{
-    Class, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable, ObjectWriter,
-    util::compute_signature,
+    ArrayWriter, Class, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable,
+    ObjectWriter, Writer, util::compute_signature,
 };
 use std::io;
 use std::sync::Arc;
@@ -131,7 +131,7 @@ impl JavaSerializable for Throwable {
         self.detail_message.write_to(w)?;
         match &self.cause {
             Some(cause) => cause.write_to(w)?,
-            None => w.write_null()?,
+            None => w.write(())?,
         }
         Ok(())
     }

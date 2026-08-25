@@ -8,7 +8,7 @@ pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind}
 pub use extends::{Extends, ExtendsLayout};
 pub use object::{Object, ObjectBuilder};
 pub use serializable::{JavaObject, JavaSerializable, JavaWriteable};
-pub use writer::ObjectWriter;
+pub use writer::{ArrayWriter, ObjectWriter, Writer};
 
 #[cfg(test)]
 mod tests {
@@ -42,8 +42,8 @@ mod tests {
 
     impl JavaSerializable for Demo {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-            w.write_int(self.i)?;
-            w.write_string(&self.message)?;
+            self.i.write_to(w)?;
+            self.message.write_to(w)?;
             Ok(())
         }
     }
@@ -66,7 +66,7 @@ mod tests {
 
     impl JavaSerializable for Address {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-            w.write_string(&self.city)?;
+            w.write(&self.city)?;
             Ok(())
         }
     }
@@ -91,7 +91,7 @@ mod tests {
 
     impl JavaSerializable for Order {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-            w.write_int(self.id)?;
+            self.id.write_to(w)?;
             self.address.write_to(w)?;
             Ok(())
         }

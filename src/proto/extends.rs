@@ -77,7 +77,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Class, Field};
+    use crate::{Class, Field, Writer};
     use once_cell::sync::Lazy;
     use std::io::Write;
 
@@ -100,7 +100,7 @@ mod tests {
 
     impl JavaSerializable for PojoA {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
-            w.write_int(self.id)?;
+            w.write(self.id)?;
             Ok(())
         }
     }

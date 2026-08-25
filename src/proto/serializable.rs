@@ -1,7 +1,6 @@
 use super::class::Class;
 use super::object::Object;
-use super::writer::ObjectWriter;
-use std::collections::VecDeque;
+use super::writer::{ArrayWriter, ObjectWriter, Writer};
 use std::io;
 
 pub trait JavaObject {
@@ -52,8 +51,7 @@ pub trait JavaWriteable {
 
 impl JavaWriteable for String {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_string(self)?;
-        Ok(())
+        w.write(self)
     }
 }
 
@@ -66,130 +64,109 @@ impl JavaWriteable for str {
 
 impl JavaWriteable for bool {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_bool(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for i8 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_byte(*self as u8)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for u8 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_byte(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for i16 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_short(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for u16 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_short(*self as i16)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for i32 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_int(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for u32 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_int(*self as i32)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for i64 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_long(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for u64 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_long(*self as i64)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for f32 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_float(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for f64 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_double(*self)?;
-        Ok(())
+        w.write(*self)
     }
 }
 
 impl JavaWriteable for [u8] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_byte_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [i16] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_short_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [i32] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_int_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [i64] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_long_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [f32] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_float_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [f64] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_double_array(self)?;
-        Ok(())
+        w.write_all(self)
     }
 }
 
 impl JavaWriteable for [String] {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.begin_array(&Class::class_of_string_array(), self.len())?;
-        for next in self {
-            w.write_string(next)?;
-        }
-        Ok(())
+        w.write_all(self)
     }
 }
 
@@ -208,22 +185,7 @@ where
     }
 }
 
-impl<T> JavaWriteable for VecDeque<T>
-where
-    T: JavaSerializable + JavaObject,
-{
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let class = Class::class_of_array(&T::class());
-        w.begin_array(&class, self.len())?;
-
-        for next in self {
-            next.write_to(w)?;
-        }
-        Ok(())
-    }
-}
-
-impl<T> JavaWriteable for Vec<T>
+impl<T> JavaWriteable for [T]
 where
     T: JavaSerializable + JavaObject,
 {

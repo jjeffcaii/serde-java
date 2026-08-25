@@ -5,8 +5,8 @@ use syn::{GenericArgument, PathArguments, Type, TypePath};
 
 /// The Java type a Rust field maps to.
 pub enum JavaTy {
-    /// A JVM primitive: (`FieldBuilder` method, `ObjectWriter` method, optional `as` cast).
-    Prim(&'static str, &'static str, Option<&'static str>),
+    /// A JVM primitive: (`FieldBuilder` method, `ObjectWriter` method).
+    Prim(&'static str, &'static str),
     /// `java.lang.String`.
     Str,
     /// Anything else — assumed to implement `JavaObject`.
@@ -36,7 +36,7 @@ impl JavaTy {
     /// The `FieldBuilder` call chained onto `Field::builder(name)`.
     pub fn field_method(&self) -> TokenStream {
         match self {
-            JavaTy::Prim(method, _, _) => {
+            JavaTy::Prim(method, _) => {
                 let m = Ident::new(method, Span::call_site());
                 quote!(.#m())
             }
@@ -60,17 +60,11 @@ impl JavaTy {
     /// array-class static, used only by the object-array variant.
     pub fn write_stmts(&self, access: &TokenStream, array_class: Option<&Ident>) -> TokenStream {
         match self {
-            JavaTy::Prim(_, method, cast) => {
+            JavaTy::Prim(_, method) => {
                 let m = Ident::new(method, Span::call_site());
-                match cast {
-                    Some(c) => {
-                        let c = Ident::new(c, Span::call_site());
-                        quote!(w.#m(#access as #c)?;)
-                    }
-                    None => quote!(w.#m(#access)?;),
-                }
+                quote!(w.#m(#access)?;)
             }
-            JavaTy::Str => quote!(w.write_string(&#access)?;),
+            JavaTy::Str => quote!(w.write(&#access)?;),
             JavaTy::Object(t) => quote!(
                 <#t as ::serde_java::JavaWriteable>::write_to(&#access, w)?;
             ),
@@ -78,7 +72,7 @@ impl JavaTy {
                 let inner_stmts = inner.write_stmts(&quote!((*__v)), array_class);
                 quote!(match &#access {
                     ::std::option::Option::Some(__v) => { #inner_stmts }
-                    ::std::option::Option::None => { w.write_null()?; }
+                    ::std::option::Option::None => { w.write(())?; }
                 })
             }
             JavaTy::PrimArray(_, method) => {
@@ -157,15 +151,13 @@ fn resolve_path(orig: &Type, p: &TypePath) -> syn::Result<JavaTy> {
 
 fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
     Ok(match name {
-        "bool" => JavaTy::Prim("boolean", "write_bool", None),
-        "i8" => JavaTy::Prim("byte", "write_byte", Some("u8")),
-        "u8" => JavaTy::Prim("byte", "write_byte", None),
-        "u16" => JavaTy::Prim("char", "write_char", None),
-        "i16" => JavaTy::Prim("short", "write_short", None),
-        "i32" => JavaTy::Prim("int", "write_int", None),
-        "i64" => JavaTy::Prim("long", "write_long", None),
-        "f32" => JavaTy::Prim("float", "write_float", None),
-        "f64" => JavaTy::Prim("double", "write_double", None),
+        "bool" => JavaTy::Prim("boolean", "write"),
+        "i8" | "u8" => JavaTy::Prim("byte", "write"),
+        "i16" | "u16" => JavaTy::Prim("short", "write"),
+        "i32" | "u32" => JavaTy::Prim("int", "write"),
+        "i64" | "u64" => JavaTy::Prim("long", "write"),
+        "f32" => JavaTy::Prim("float", "write"),
+        "f64" => JavaTy::Prim("double", "write"),
         "String" | "str" => JavaTy::Str,
         "char" => {
             return Err(syn::Error::new(
@@ -173,12 +165,12 @@ fn scalar(orig: &Type, name: &str) -> syn::Result<JavaTy> {
                 "Rust `char` is 4 bytes and does not match Java's 2-byte `char`; use `u16`",
             ));
         }
-        "u32" | "u64" | "usize" | "isize" | "i128" | "u128" => {
+        "usize" | "isize" | "i128" | "u128" => {
             return Err(syn::Error::new(
                 orig.span(),
                 format!(
                     "`{name}` has no Java equivalent; use one of \
-                     i8/u8/u16/i16/i32/i64/f32/f64"
+                     i8/u8/i16/u16/i32/u32/i64/u64/f32/f64"
                 ),
             ));
         }
@@ -212,18 +204,18 @@ fn resolve_array(orig: &Type, elem: &Type) -> syn::Result<JavaTy> {
     }
 
     Ok(match name.as_str() {
-        "bool" => JavaTy::PrimArray("boolean_array", "write_boolean_array"),
-        "i8" => JavaTy::PrimArray("byte_array", "write_i8_array"),
-        "i16" => JavaTy::PrimArray("short_array", "write_short_array"),
-        "i32" => JavaTy::PrimArray("int_array", "write_int_array"),
-        "i64" | "isize" => JavaTy::PrimArray("long_array", "write_long_array"),
-        "u8" => JavaTy::PrimArray("byte_array", "write_byte_array"),
-        "u16" => JavaTy::PrimArray("short_array", "write_u16_array"),
-        "u32" => JavaTy::PrimArray("int_array", "write_u32_array"),
-        "u64" | "usize" => JavaTy::PrimArray("long_array", "write_u64_array"),
-        "f32" => JavaTy::PrimArray("float_array", "write_float_array"),
-        "f64" => JavaTy::PrimArray("double_array", "write_double_array"),
-        "String" | "str" => JavaTy::PrimArray("string_array", "write_string_array"),
+        "bool" => JavaTy::PrimArray("boolean_array", "write_all"),
+        "i8" => JavaTy::PrimArray("byte_array", "write_all"),
+        "i16" => JavaTy::PrimArray("short_array", "write_all"),
+        "i32" => JavaTy::PrimArray("int_array", "write_all"),
+        "i64" | "isize" => JavaTy::PrimArray("long_array", "write_all"),
+        "u8" => JavaTy::PrimArray("byte_array", "write_all"),
+        "u16" => JavaTy::PrimArray("short_array", "write_all"),
+        "u32" => JavaTy::PrimArray("int_array", "write_all"),
+        "u64" | "usize" => JavaTy::PrimArray("long_array", "write_all"),
+        "f32" => JavaTy::PrimArray("float_array", "write_all"),
+        "f64" => JavaTy::PrimArray("double_array", "write_all"),
+        "String" | "str" => JavaTy::PrimArray("string_array", "write_all"),
         "char" => {
             return Err(syn::Error::new(
                 orig.span(),

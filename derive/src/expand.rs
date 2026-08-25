@@ -171,6 +171,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut array_statics: Vec<TokenStream> = Vec::new();
 
     let mut uses_layout = false;
+    let mut uses_array = false;
 
     for (idx, r) in resolved.iter().enumerate() {
         let name = &r.java_name;
@@ -181,6 +182,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
 
         match &r.ser {
             FieldSer::Mapped(ty) => {
+                uses_array = true;
                 let array_class = ty.obj_array_elem().map(|elem| {
                     let id = Ident::new(&format!("__ARRAY_CLASS_{idx}"), Span::call_site());
                     array_statics.push(quote!(
@@ -206,7 +208,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
                                 ::serde_java::JavaWriteable::write_to(&#path::layout(__v), w)?;
                             }
                             ::std::option::Option::None => {
-                                w.write_null()?;
+                                w.write(())?;
                             }
                         }
                     )
@@ -227,6 +229,12 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
         )
     });
 
+    let array_import = uses_array.then(|| {
+        quote!(
+            use ::serde_java::ArrayWriter as _;
+        )
+    });
+
     // A struct whose fields are all `skip`ped writes nothing, which would leave `w` unused.
     let w = if write_stmts.is_empty() {
         Ident::new("_w", Span::call_site())
@@ -242,7 +250,10 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     Ok(quote! {
         const _: () = {
             use ::serde_java::__private::Lazy;
+            use ::serde_java::Writer as _;
+
             #layout_import
+            #array_import
 
             static CLASS: Lazy<::serde_java::Class> = Lazy::new(|| {
                 ::serde_java::Class::builder(#class_name, #suid)

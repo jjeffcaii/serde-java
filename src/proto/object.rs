@@ -85,7 +85,7 @@ impl<'a, I, P> Object<'a, I, P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Field;
+    use crate::{Field, Writer};
     use std::io;
     use std::io::Write;
 
@@ -95,7 +95,7 @@ mod tests {
 
     impl JavaSerializable for PojoA {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
-            w.write_int(self.id)?;
+            w.write(self.id)?;
             Ok(())
         }
     }

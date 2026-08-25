@@ -354,7 +354,7 @@ impl JavaObject for HandTeam {
 
 impl JavaSerializable for HandTeam {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_int(self.size)?;
+        w.write(self.size)?;
 
         // Same magic number that used to be hard-coded in examples/example.rs
         w.begin_array(
@@ -497,7 +497,7 @@ impl JavaObject for HandTags {
 
 impl JavaSerializable for HandTags {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_int(self.id)?;
+        w.write(self.id)?;
         self.tags.write_to(w)?;
         Ok(())
     }
