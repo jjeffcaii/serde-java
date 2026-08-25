@@ -105,7 +105,7 @@ mod tests {
             let mut b: Vec<u8> = vec![];
             let mut w = ObjectWriter::new(&mut b)?;
 
-            w.write_string(origin)?;
+            w.write(origin)?;
 
             let actual = hex::encode(&b);
 

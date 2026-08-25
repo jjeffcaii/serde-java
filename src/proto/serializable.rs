@@ -57,8 +57,7 @@ impl JavaWriteable for String {
 
 impl JavaWriteable for str {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_string(self)?;
-        Ok(())
+        w.write(self)
     }
 }
 

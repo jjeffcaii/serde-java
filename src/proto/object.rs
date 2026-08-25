@@ -106,8 +106,7 @@ mod tests {
 
     impl JavaSerializable for PojoB {
         fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
-            w.write_string(&self.name)?;
-            Ok(())
+            w.write(&self.name)
         }
     }
 

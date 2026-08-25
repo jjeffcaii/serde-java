@@ -338,7 +338,7 @@ impl JavaObject for HandAddress {
 
 impl JavaSerializable for HandAddress {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_string(&self.city)?;
+        w.write(&self.city)?;
         Ok(())
     }
 }

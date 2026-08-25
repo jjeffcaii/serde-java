@@ -175,6 +175,7 @@ impl<W> Writer<()> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: ()) -> io::Result<()> {
         self.put_u8(TC_NULL)
     }
@@ -184,6 +185,7 @@ impl<W> Writer<bool> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: bool) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u8(input as u8)
@@ -197,6 +199,7 @@ impl<W> Writer<i8> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: i8) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u8(input as u8)
@@ -210,6 +213,7 @@ impl<W> Writer<u8> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: u8) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u8(input)
@@ -223,6 +227,7 @@ impl<W> Writer<i16> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: i16) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_i16::<BigEndian>(input)
@@ -236,6 +241,7 @@ impl<W> Writer<u16> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: u16) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u16::<BigEndian>(input)
@@ -249,6 +255,7 @@ impl<W> Writer<i32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: i32) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_i32::<BigEndian>(input)
@@ -262,6 +269,7 @@ impl<W> Writer<u32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: u32) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u32::<BigEndian>(input)
@@ -275,6 +283,7 @@ impl<W> Writer<i64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: i64) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_i64::<BigEndian>(input)
@@ -288,6 +297,7 @@ impl<W> Writer<u64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: u64) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_u64::<BigEndian>(input)
@@ -301,6 +311,7 @@ impl<W> Writer<f32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: f32) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_f32::<BigEndian>(input)
@@ -314,6 +325,7 @@ impl<W> Writer<f64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: f64) -> io::Result<()> {
         if self.blkmode {
             self.blk.write_f64::<BigEndian>(input)
@@ -327,6 +339,7 @@ impl<'a, W> Writer<&'a str> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: &'a str) -> io::Result<()> {
         self.write_string(input)?;
         Ok(())
@@ -337,6 +350,7 @@ impl<'a, W> Writer<&'a String> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write(&mut self, input: &'a String) -> io::Result<()> {
         self.write_string(input)?;
         Ok(())
@@ -351,6 +365,7 @@ impl<W> ArrayWriter<bool> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[bool]) -> io::Result<()> {
         self.begin_array(&Class::class_of_boolean_array(), input.len())?;
         for next in input {
@@ -364,6 +379,7 @@ impl<W> ArrayWriter<u8> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[u8]) -> io::Result<()> {
         self.begin_array(&Class::class_of_byte_array(), input.len())?;
         for next in input {
@@ -378,6 +394,7 @@ impl<W> ArrayWriter<i8> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[i8]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_byte_array(), size)?;
@@ -392,6 +409,7 @@ impl<W> ArrayWriter<i16> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[i16]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_short_array(), size)?;
@@ -406,6 +424,7 @@ impl<W> ArrayWriter<u16> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[u16]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_short_array(), size)?;
@@ -420,6 +439,7 @@ impl<W> ArrayWriter<i32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[i32]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_int_array(), size)?;
@@ -434,6 +454,7 @@ impl<W> ArrayWriter<u32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[u32]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_int_array(), size)?;
@@ -448,6 +469,7 @@ impl<W> ArrayWriter<i64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[i64]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_long_array(), size)?;
@@ -462,6 +484,7 @@ impl<W> ArrayWriter<u64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[u64]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_long_array(), size)?;
@@ -476,6 +499,7 @@ impl<W> ArrayWriter<f32> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[f32]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_float_array(), size)?;
@@ -490,6 +514,7 @@ impl<W> ArrayWriter<f64> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[f64]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_double_array(), size)?;
@@ -504,6 +529,7 @@ impl<W> ArrayWriter<String> for ObjectWriter<W>
 where
     W: io::Write,
 {
+    #[inline]
     fn write_all(&mut self, input: &[String]) -> io::Result<()> {
         let size = input.len();
         self.begin_array(&Class::class_of_string_array(), size)?;
@@ -516,7 +542,7 @@ where
 
 impl<W: io::Write> ObjectWriter<W> {
     #[inline]
-    pub fn write_string(&mut self, s: &str) -> io::Result<u32> {
+    pub(crate) fn write_string(&mut self, s: &str) -> io::Result<u32> {
         self.flush()?;
         if let Some(&h) = self.string_handles.get(s) {
             self.write_reference(h)?;
@@ -545,32 +571,6 @@ impl<W: io::Write> ObjectWriter<W> {
         self.put_u16(bytes.len() as u16)?;
         self.put_all(&bytes)?;
         Ok(())
-    }
-
-    pub fn begin_array(&mut self, class: &Class, size: usize) -> io::Result<u32> {
-        self.put_u8(TC_ARRAY)?;
-        self.write_class(class)?;
-        let handle = self.alloc_handle();
-        self.put_u32(size as u32)?;
-
-        Ok(handle)
-    }
-
-    #[inline]
-    fn write_primitive_array<T>(
-        &mut self,
-        class: &Class,
-        items: &[T],
-        write_elem: impl Fn(&mut Self, &T) -> io::Result<()>,
-    ) -> io::Result<u32> {
-        self.put_u8(TC_ARRAY)?;
-        self.write_class(class)?;
-        let handle = self.alloc_handle();
-        self.put_u32(items.len() as u32)?;
-        for item in items {
-            write_elem(self, item)?;
-        }
-        Ok(handle)
     }
 
     #[inline]
@@ -642,6 +642,17 @@ impl<W: io::Write> ObjectWriter<W> {
         self.write_class(class)?;
 
         Ok(self.alloc_handle())
+    }
+
+    #[inline]
+    pub fn begin_array(&mut self, class: &Class, size: usize) -> io::Result<u32> {
+        self.flush()?;
+        self.put_u8(TC_ARRAY)?;
+        self.write_class(class)?;
+        let handle = self.alloc_handle();
+        self.put_u32(size as u32)?;
+
+        Ok(handle)
     }
 
     #[inline]
