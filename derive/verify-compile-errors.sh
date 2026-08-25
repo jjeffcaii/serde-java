@@ -60,11 +60,11 @@ check "unknown field attribute" \
 struct A { #[java(bogus)] x: i32 }
 '
 
-check "rust char" \
-    "Rust \`char\` is 4 bytes" '
+check "Vec<char>" \
+    'are not supported yet' '
 #[derive(JavaSerialize)]
 #[java(class = "com.example.A", serial_version_uid = 1)]
-struct A { x: char }
+struct A { x: Vec<char> }
 '
 
 check "u32 has no java equivalent" \

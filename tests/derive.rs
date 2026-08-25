@@ -89,6 +89,7 @@ fn test_derive_all_scalar_types() {
         h_f32: f32,
         i_f64: f64,
         j_string: String,
+        k_char: char,
     }
 
     let sigs: Vec<String> = Scalars::class()
@@ -108,6 +109,7 @@ fn test_derive_all_scalar_types() {
             "J",
             "F",
             "D",
+            "C",
             "Ljava/lang/String;"
         ],
         sigs
@@ -124,9 +126,45 @@ fn test_derive_all_scalar_types() {
         h_f32: 7.0,
         i_f64: 8.0,
         j_string: "x".to_string(),
+        k_char: 'z',
     };
     // Only checks that it runs without panicking
     assert!(!s.to_bytes().unwrap().is_empty());
+}
+
+// ---- char ----
+// Same class name, SUID and field name as `proto::tests::CharDemo` (the hand-written twin), so
+// the fixture below is shared between the two.
+
+#[derive(JavaSerialize)]
+#[java(class = "com.example.CharDemo", serial_version_uid = -7957532738628518212)]
+struct DerivedCharDemo {
+    ch: char,
+}
+
+#[test]
+fn test_derive_char_field_schema() {
+    let sigs: Vec<String> = DerivedCharDemo::class()
+        .fields()
+        .iter()
+        .map(|f| f.kind().to_string())
+        .collect();
+    assert_eq!(vec!["C"], sigs);
+}
+
+#[test]
+fn test_derive_char_field_matches_fixture() {
+    let d = DerivedCharDemo { ch: 'a' };
+    assert_eq!(
+        "aced000573720014636f6d2e6578616d706c652e4368617244656d6f91912a2291817ebc020001430002636878700061",
+        hex::encode(d.to_bytes().unwrap())
+    );
+}
+
+#[test]
+fn test_derive_char_field_rejects_non_bmp() {
+    let d = DerivedCharDemo { ch: '😀' };
+    assert!(d.to_bytes().is_err());
 }
 
 // ---- rename ----

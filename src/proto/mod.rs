@@ -396,9 +396,62 @@ mod tests {
             );
         }
 
+        // CJK char, still a single UTF-16 code unit: same classdesc, only the trailing 2-byte
+        // value (last 4 hex chars) differs from the 'a' case above.
+        {
+            let o = CharDemo { ch: '世' };
+            let raw = o.to_bytes()?;
+            assert_eq!(
+                "aced000573720014636f6d2e6578616d706c652e4368617244656d6f91912a2291817ebc020001430002636878700061"
+                    .replace("0061", "4e16"),
+                hex::encode(&raw)
+            );
+        }
+
         // Emoji is outside BMP, will return an error
         let o = CharDemo { ch: '😀' };
         assert!(o.to_bytes().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_char_write() -> Result<()> {
+        init();
+
+        fn check(origin: char, expect: &str) -> Result<()> {
+            let mut b: Vec<u8> = vec![];
+            let mut w = ObjectWriter::new(&mut b)?;
+            // A bare `char` is a raw 2-byte value with no framing of its own, so it must be
+            // written outside block-data mode, same as `default_write_object` does for declared
+            // fields; a fresh `ObjectWriter` otherwise starts in block-data mode and would
+            // silently buffer the bytes instead of emitting them.
+            w.set_block_data_mode(false);
+
+            w.write(origin)?;
+
+            let actual = hex::encode(&b);
+
+            info!("{:?}: {}", origin, actual);
+
+            assert_eq!(expect, &actual);
+            Ok(())
+        }
+
+        // ASCII
+        check('a', "aced00050061")?;
+
+        // CJK, still a single UTF-16 code unit
+        check('世', "aced00054e16")?;
+
+        // the highest BMP code point
+        check('\u{ffff}', "aced0005ffff")?;
+
+        // outside the BMP: cannot be represented by a single Java `char`
+        let mut b: Vec<u8> = vec![];
+        let mut w = ObjectWriter::new(&mut b)?;
+        w.set_block_data_mode(false);
+        assert!(w.write('😀').is_err());
 
         Ok(())
     }

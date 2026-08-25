@@ -316,8 +316,9 @@ straight from the Rust type — and the last two columns are what you write by h
 | `bool`                  | `boolean`          | `Z`                   | `.boolean()`                        | `w.write_bool(v)`                     |
 | `i8`                    | `byte`             | `B`                   | `.byte()`                           | `w.write_byte(v as u8)`               |
 | `u8`                    | `byte`             | `B`                   | `.byte()`                           | `w.write_byte(v)`                     |
-| `u16`                   | `char`             | `C`                   | `.char()`                           | `w.write_char(v)`                     |
+| `u16`                   | `short`            | `S`                   | `.short()`                          | `w.write(v)`                          |
 | `i16`                   | `short`            | `S`                   | `.short()`                          | `w.write_short(v)`                    |
+| `char`                  | `char`             | `C`                   | `.char()`                           | `w.write(v)`                          |
 | `i32`                   | `int`              | `I`                   | `.int()`                            | `w.write_int(v)`                      |
 | `i64`                   | `long`             | `J`                   | `.long()`                           | `w.write_long(v)`                     |
 | `f32`                   | `float`            | `F`                   | `.float()`                          | `w.write_float(v)`                    |
@@ -349,16 +350,16 @@ Every one of these is a compile-time `syn::Error` at the offending span, not a r
 
 | Rust                                              | Why                                                        | Use instead                     |
 | ------------------------------------------------- | ---------------------------------------------------------- | -------------------------------- |
-| `char`                                            | Rust `char` is 4 bytes, Java `char` is 2                   | `u16`                            |
-| `u32`, `u64`, `usize`, `isize`, `i128`, `u128`    | no Java equivalent ‡                                       | `i32` / `i64`                    |
+| `u32`, `u64`, `i128`, `u128`                      | no Java equivalent ‡                                       | `i32` / `i64`                    |
 | `Option<primitive>`                               | Java primitives cannot be null                             | drop the `Option`, or box it     |
 | `Vec<i8>`                                         | `write_byte_array` takes `&[u8]`                           | `Vec<u8>`                        |
-| `Vec<u16>`, `Vec<char>`                           | no `char[]` writer in `ObjectWriter` yet                   | —                                |
+| `Vec<char>`                                       | no `char[]` writer in `ObjectWriter` yet                   | —                                |
 | `Vec<String>`, `Vec<bool>`                        | writers exist, just not wired into the derive's table      | hand-written impl                |
 | `Vec<Vec<T>>`, `Vec<Option<T>>`, `Option<Option<T>>` | no Java equivalent (`Option<Vec<T>>` *is* fine)         | flatten it                       |
 
 ‡ `u32` and `u64` do have `JavaWriteable` impls on the hand-written path (they write `int` and `long` after an `as`
-cast); it is only the derive that refuses to guess for them.
+cast); it is only the derive that refuses to guess for them. `isize`/`usize` are not in this table — the derive maps
+them to `long`, same as `i64`/`u64`.
 
 Any *other* type path — `HashMap<K, V>`, a type from another crate, one of the `serde-java-ext` types below — is
 treated as an opaque `JavaObject`, and its descriptor comes from `<T as JavaObject>::class().signature()`. If it does
