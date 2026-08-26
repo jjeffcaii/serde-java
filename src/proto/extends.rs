@@ -1,6 +1,7 @@
 use super::object::Object;
 use super::serializable::{JavaObject, JavaSerializable, JavaWriteable};
 use super::writer::ObjectWriter;
+use crate::Reference;
 use std::fmt::{Debug, Formatter};
 use std::{fmt, io};
 
@@ -14,6 +15,16 @@ where
     P: JavaSerializable + JavaObject,
 {
     fn extends(self, parent: P) -> ExtendsLayout<Self, P> {
+        ExtendsLayout::new(self, parent)
+    }
+}
+
+impl<T, P> Extends<Reference<P>> for T
+where
+    T: JavaSerializable + JavaObject,
+    P: JavaSerializable + JavaObject,
+{
+    fn extends(self, parent: Reference<P>) -> ExtendsLayout<Self, Reference<P>> {
         ExtendsLayout::new(self, parent)
     }
 }
@@ -63,10 +74,27 @@ where
     P: JavaSerializable + JavaObject,
 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let t_class = T::class();
-        let obj = Object::<T, P>::builder(t_class)
-            .this(&self.this)
-            .extends(&self.parent)
+        let obj = Object::<T, P>::builder(T::class(), &self.this)
+            .extends(P::class(), &self.parent)
+            .build();
+
+        obj.write_to(w)?;
+
+        Ok(())
+    }
+}
+
+impl<T, P> JavaWriteable for ExtendsLayout<T, Reference<P>>
+where
+    T: JavaSerializable + JavaObject,
+    P: JavaSerializable + JavaObject,
+{
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let parent = self.parent.borrow();
+
+        let obj = Object::<T, P>::builder(T::class(), &self.this)
+            .key(self.parent.key())
+            .extends(P::class(), &parent)
             .build();
 
         obj.write_to(w)?;

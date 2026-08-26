@@ -19,7 +19,6 @@ mod tests {
     use anyhow::Result;
     use once_cell::sync::Lazy;
     use std::io;
-    use std::io::Write;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -145,9 +144,7 @@ mod tests {
             message: "helloWorld".to_string(),
         };
 
-        let obj = Object::<Demo, ()>::builder(Demo::class())
-            .this(&demo)
-            .build();
+        let obj = Object::<Demo, ()>::builder(Demo::class(), &demo).build();
 
         obj.write_to(&mut w)?;
 
@@ -175,9 +172,7 @@ mod tests {
             },
         };
 
-        let obj = Object::<Order, ()>::builder(Order::class())
-            .this(&order)
-            .build();
+        let obj = Object::<Order, ()>::builder(Order::class(), &order).build();
 
         obj.write_to(&mut w)?;
 
@@ -379,7 +374,7 @@ mod tests {
     }
 
     impl JavaSerializable for CharDemo {
-        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
             w.write(self.ch)
         }
     }

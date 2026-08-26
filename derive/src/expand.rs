@@ -249,7 +249,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
 
     Ok(quote! {
         const _: () = {
-            use ::serde_java::__private::Lazy;
+            use ::serde_java::__private::once_cell::sync::Lazy;
             use ::serde_java::Writer as _;
 
             #layout_import

@@ -19,4 +19,6 @@ pub use date::Date;
 pub use list::{ArrayList, EmptyList, LinkedList};
 pub use map::HashMap;
 pub use number::{Byte, Double, Float, Integer, Long, Short};
-pub use throwable::{StackTraceElement, StackTraceElementBuilder, Throwable, ThrowableBuilder};
+pub use throwable::{
+    Exception, StackTraceElement, StackTraceElementBuilder, Throwable, ThrowableBuilder,
+};

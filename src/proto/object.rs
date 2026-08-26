@@ -9,10 +9,8 @@ impl JavaSerializable for () {
 }
 
 pub struct Object<'a, T, P> {
-    class: Class,
-    instance: Option<&'a T>,
-    super_instance: Option<&'a P>,
-    key: Option<usize>,
+    this: (Class, &'a T, Option<usize>),
+    parent: Option<(Class, &'a P)>,
 }
 
 pub struct ObjectBuilder<'a, T, P> {
@@ -20,18 +18,13 @@ pub struct ObjectBuilder<'a, T, P> {
 }
 
 impl<'a, T, P> ObjectBuilder<'a, T, P> {
-    pub fn extends(mut self, parent: &'a P) -> Self {
-        self.inner.super_instance.replace(parent);
-        self
-    }
-
     pub fn key(mut self, key: usize) -> Self {
-        self.inner.key.replace(key);
+        self.inner.this.2.replace(key);
         self
     }
 
-    pub fn this(mut self, this: &'a T) -> Self {
-        self.inner.instance.replace(this);
+    pub fn extends(mut self, class: Class, parent: &'a P) -> Self {
+        self.inner.parent = Some((class, parent));
         self
     }
 
@@ -42,27 +35,24 @@ impl<'a, T, P> ObjectBuilder<'a, T, P> {
 }
 
 impl<'a, I, P> Object<'a, I, P> {
-    pub fn builder(class: Class) -> ObjectBuilder<'a, I, P> {
+    pub fn builder(class: Class, instance: &'a I) -> ObjectBuilder<'a, I, P> {
         ObjectBuilder {
             inner: Object {
-                class,
-                instance: None,
-                super_instance: None,
-                key: None,
+                this: (class, instance, None),
+                parent: None,
             },
         }
     }
 
-    pub fn class(&self) -> Class {
-        Clone::clone(&self.class)
+    pub fn this(&self) -> (&Class, &'a I, Option<usize>) {
+        (&self.this.0, self.this.1, self.this.2)
     }
 
-    pub fn this(&self) -> Option<&'a I> {
-        self.instance
-    }
-
-    pub fn extends(&self) -> Option<&'a P> {
-        self.super_instance
+    pub fn extends(&self) -> Option<(&Class, &'a P)> {
+        match &self.parent {
+            None => None,
+            Some((class, instance)) => Some((class, instance)),
+        }
     }
 
     pub fn write_to<W>(&self, w: &mut ObjectWriter<W>) -> io::Result<()>
@@ -71,23 +61,33 @@ impl<'a, I, P> Object<'a, I, P> {
         P: JavaSerializable,
         I: JavaSerializable,
     {
+        let (class, this, key) = &self.this;
+
         let old = w.set_block_data_mode(true);
 
-        let h = w.begin_object(&self.class)?;
+        if let Some(key) = key {
+            if let Some(h) = w.object_handles.get(key) {
+                return w.write_reference(*h);
+            }
+        }
 
-        if let Some(k) = &self.key {
+        let h = w.begin_object(class)?;
+
+        if let Some(k) = key {
             w.object_handles.insert(*k, h);
         }
 
-        if let Some(p) = &self.super_instance {
-            w.with_dyn(|w| p.write_object(w))?;
+        if let Some((super_class, parent)) = &self.parent {
+            w.with_dyn(|w| parent.write_object(w))?;
+
+            if super_class.flags().contains(ClassFlags::WRITE_METHOD) {
+                w.end()?;
+            }
         }
 
-        if let Some(i) = &self.instance {
-            w.with_dyn(|w| i.write_object(w))?;
-        }
+        w.with_dyn(|w| this.write_object(w))?;
 
-        if self.class.flags().contains(ClassFlags::WRITE_METHOD) {
+        if class.flags().contains(ClassFlags::WRITE_METHOD) {
             w.end()?;
         }
 
@@ -148,9 +148,8 @@ mod tests {
 
         let a = PojoA { id: 0xff };
 
-        let obj = Object::<PojoA, PojoB>::builder(class_a)
-            .this(&a)
-            .extends(&b)
+        let obj = Object::<PojoA, PojoB>::builder(class_a, &a)
+            .extends(class_b, &b)
             .build();
 
         let mut raw: Vec<u8> = vec![];

@@ -25,7 +25,8 @@ pub use serde_java_derive::JavaSerialize;
 /// Not a stable API.
 #[doc(hidden)]
 pub mod __private {
-    pub use once_cell::sync::Lazy;
+    pub use bitflags;
+    pub use once_cell;
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

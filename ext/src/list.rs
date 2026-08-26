@@ -1,5 +1,5 @@
 use super::misc::write_boxed;
-use serde_java::__private::Lazy;
+use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
 };

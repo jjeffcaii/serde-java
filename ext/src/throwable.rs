@@ -1,11 +1,20 @@
 use crate::{ArrayList, EmptyList};
-use serde_java::__private::Lazy;
+use serde_java::__private::bitflags::bitflags;
+use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::util::compute_signature;
 use serde_java::{
-    Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaSerialize, JavaWriteable, Layout,
-    ObjectWriter, Reference,
+    Class, ClassFlags, Extends, ExtendsLayout, Field, JavaObject, JavaSerializable, JavaSerialize,
+    JavaWriteable, Layout, ObjectWriter, Reference,
 };
 use std::io;
+
+bitflags! {
+    #[derive(Default,Clone,Copy)]
+    pub struct FormatFlags: u8 {
+        const BUILTIN_CLASS_LOADER = 0x01;
+        const JDK_NON_UPGRADEABLE_MODULE = 0x01 << 1;
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, JavaSerialize)]
 #[java(
@@ -40,11 +49,11 @@ pub struct StackTraceElementBuilder<'a> {
     method_name: &'a str,
     file_name: &'a str,
     line_number: i32,
-    format: u8,
+    format: FormatFlags,
 }
 
 impl<'a> StackTraceElementBuilder<'a> {
-    pub fn format(mut self, format: u8) -> Self {
+    pub fn format(mut self, format: FormatFlags) -> Self {
         self.format = format;
         self
     }
@@ -73,7 +82,7 @@ impl<'a> StackTraceElementBuilder<'a> {
             method_name: method_name.to_owned(),
             file_name: file_name.to_owned(),
             line_number,
-            format,
+            format: format.bits(),
         }
     }
 }
@@ -99,7 +108,7 @@ impl StackTraceElement {
             method_name,
             file_name,
             line_number,
-            format: 0,
+            format: Default::default(),
         }
     }
 }
@@ -233,6 +242,47 @@ impl JavaSerializable for Throwable {
     }
 }
 
+static CLASS_OF_EXCEPTION: Lazy<Class> = Lazy::new(|| {
+    Class::builder("java.lang.Exception", -3387516993124229948)
+        .super_class(Throwable::class())
+        .build()
+});
+
+#[derive(Default)]
+struct ExceptionInner {}
+
+impl JavaObject for ExceptionInner {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_EXCEPTION)
+    }
+}
+
+impl JavaSerializable for ExceptionInner {
+    fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct Exception(ExtendsLayout<ExceptionInner, Reference<Throwable>>);
+
+impl Exception {
+    pub fn new(parent: Reference<Throwable>) -> Self {
+        Exception(ExceptionInner::default().extends(parent))
+    }
+}
+
+impl JavaObject for Exception {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_EXCEPTION)
+    }
+}
+
+impl JavaWriteable for Exception {
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.0.write_to(w)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,13 +319,29 @@ mod tests {
     #[test]
     fn test_throwable() -> io::Result<()> {
         init();
+
+        // package com.example;
+        //
+        // import org.apache.commons.codec.binary.Hex;
+        // import org.apache.commons.lang3.SerializationUtils;
+        //
+        // public class ThrowableDemo {
+        //
+        //   public static void main(String[] args) {
+        // 	   Throwable th = new Throwable("fake");
+        // 	   byte[] raw = SerializationUtils.serialize(th);
+        // 	   System.out.println("result: " + Hex.encodeHexString(raw));
+        //   }
+        //
+        // }
+
         let stack = StackTraceElement::builder(
             "com.example.ThrowableDemo",
             "main",
             "ThrowableDemo.java",
-            15,
+            9,
         )
-        .format(1)
+        .format(FormatFlags::BUILTIN_CLASS_LOADER)
         .class_loader_name("app")
         .build();
 
@@ -289,7 +355,56 @@ mod tests {
         let raw = th.to_bytes()?;
 
         assert_eq!(
-            "aced0005737200136a6176612e6c616e672e5468726f7761626c65d5c635273977b8cb0300044c000563617573657400154c6a6176612f6c616e672f5468726f7761626c653b4c000d64657461696c4d6573736167657400124c6a6176612f6c616e672f537472696e673b5b000a737461636b547261636574001e5b4c6a6176612f6c616e672f537461636b5472616365456c656d656e743b4c001473757070726573736564457863657074696f6e737400104c6a6176612f7574696c2f4c6973743b787071007e000574000466616b657572001e5b4c6a6176612e6c616e672e537461636b5472616365456c656d656e743b02462a3c3cfd22390200007870000000017372001b6a6176612e6c616e672e537461636b5472616365456c656d656e746109c59a2636dd85020008420006666f726d617449000a6c696e654e756d6265724c000f636c6173734c6f616465724e616d6571007e00024c000e6465636c6172696e67436c61737371007e00024c000866696c654e616d6571007e00024c000a6d6574686f644e616d6571007e00024c000a6d6f64756c654e616d6571007e00024c000d6d6f64756c6556657273696f6e71007e00027870010000000f740003617070740019636f6d2e6578616d706c652e5468726f7761626c6544656d6f7400125468726f7761626c6544656d6f2e6a6176617400046d61696e70707372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede020000787078",
+            "aced0005737200136a6176612e6c616e672e5468726f7761626c65d5c635273977b8cb0300044c000563617573657400154c6a6176612f6c616e672f5468726f7761626c653b4c000d64657461696c4d6573736167657400124c6a6176612f6c616e672f537472696e673b5b000a737461636b547261636574001e5b4c6a6176612f6c616e672f537461636b5472616365456c656d656e743b4c001473757070726573736564457863657074696f6e737400104c6a6176612f7574696c2f4c6973743b787071007e000574000466616b657572001e5b4c6a6176612e6c616e672e537461636b5472616365456c656d656e743b02462a3c3cfd22390200007870000000017372001b6a6176612e6c616e672e537461636b5472616365456c656d656e746109c59a2636dd85020008420006666f726d617449000a6c696e654e756d6265724c000f636c6173734c6f616465724e616d6571007e00024c000e6465636c6172696e67436c61737371007e00024c000866696c654e616d6571007e00024c000a6d6574686f644e616d6571007e00024c000a6d6f64756c654e616d6571007e00024c000d6d6f64756c6556657273696f6e71007e000278700100000009740003617070740019636f6d2e6578616d706c652e5468726f7761626c6544656d6f7400125468726f7761626c6544656d6f2e6a6176617400046d61696e70707372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede020000787078",
+            hex::encode(&raw)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_exception() -> io::Result<()> {
+        init();
+
+        // ===== com/example/ExceptionDemo.java =====
+        //
+        // package com.example;
+        //
+        // import org.apache.commons.codec.binary.Hex;
+        // import org.apache.commons.io.FileUtils;
+        //
+        // public class ExceptionDemo {
+        //
+        //   public static void main(String[] args) throws Exception {
+        // 	   Exception ex = new Exception("fake");
+        //
+        // 	   byte[] raw = SerializationUtils.serialize(ex);
+        // 	   System.out.println("result: " + Hex.encodeHexString(raw));
+        //   }
+        //
+        // }
+
+        let stack = StackTraceElement::builder(
+            "com.example.ExceptionDemo",
+            "main",
+            "ExceptionDemo.java",
+            9,
+        )
+        .format(FormatFlags::BUILTIN_CLASS_LOADER)
+        .class_loader_name("app")
+        .build();
+
+        let th = Throwable::builder()
+            .detail_message("fake")
+            .stack_trace(stack)
+            .build();
+
+        let ex = Exception::new(th);
+
+        let raw = ex.to_bytes()?;
+
+        assert_eq!(
+            "aced0005737200136a6176612e6c616e672e457863657074696f6ed0fd1f3e1a3b1cc4020000787200136a6176612e6c616e672e5468726f7761626c65d5c635273977b8cb0300044c000563617573657400154c6a6176612f6c616e672f5468726f7761626c653b4c000d64657461696c4d6573736167657400124c6a6176612f6c616e672f537472696e673b5b000a737461636b547261636574001e5b4c6a6176612f6c616e672f537461636b5472616365456c656d656e743b4c001473757070726573736564457863657074696f6e737400104c6a6176612f7574696c2f4c6973743b787071007e000674000466616b657572001e5b4c6a6176612e6c616e672e537461636b5472616365456c656d656e743b02462a3c3cfd22390200007870000000017372001b6a6176612e6c616e672e537461636b5472616365456c656d656e746109c59a2636dd85020008420006666f726d617449000a6c696e654e756d6265724c000f636c6173734c6f616465724e616d6571007e00034c000e6465636c6172696e67436c61737371007e00034c000866696c654e616d6571007e00034c000a6d6574686f644e616d6571007e00034c000a6d6f64756c654e616d6571007e00034c000d6d6f64756c6556657273696f6e71007e000378700100000009740003617070740019636f6d2e6578616d706c652e457863657074696f6e44656d6f740012457863657074696f6e44656d6f2e6a6176617400046d61696e70707372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede020000787078",
             hex::encode(&raw)
         );
 

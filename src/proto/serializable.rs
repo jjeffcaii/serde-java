@@ -281,7 +281,7 @@ where
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         let class = Self::class();
 
-        let obj = Object::<T, ()>::builder(class).this(self).build();
+        let obj = Object::<T, ()>::builder(class, self).build();
 
         obj.write_to(w)?;
 
@@ -296,18 +296,11 @@ where
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         let key = self.key();
 
-        if let Some(h) = w.object_handles.get(&key) {
-            return w.write_reference(*h);
-        }
-
         let class = T::class();
 
         let borrowed = self.0.borrow();
 
-        let obj = Object::<T, ()>::builder(class)
-            .key(key)
-            .this(&borrowed)
-            .build();
+        let obj = Object::<T, ()>::builder(class, &borrowed).key(key).build();
 
         obj.write_to(w)?;
 
