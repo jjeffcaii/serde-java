@@ -1,4 +1,4 @@
-use crate::{ArrayList, EmptyList};
+use super::list::{ArrayList, EmptyList};
 use serde_java::__private::bitflags::bitflags;
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::util::compute_signature;
@@ -283,6 +283,81 @@ impl JavaWriteable for Exception {
     }
 }
 
+static CLASS_OF_ERROR: Lazy<Class> = Lazy::new(|| {
+    Class::builder("java.lang.Error", 4980196508277280342)
+        .super_class(Throwable::class())
+        .build()
+});
+
+#[derive(Default)]
+struct ErrorInner;
+
+impl JavaObject for ErrorInner {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_ERROR)
+    }
+}
+
+impl JavaSerializable for ErrorInner {
+    fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct Error(ExtendsLayout<ErrorInner, Reference<Throwable>>);
+
+impl Error {
+    pub fn new(parent: Reference<Throwable>) -> Self {
+        Self(ErrorInner::default().extends(parent))
+    }
+}
+
+impl JavaObject for Error {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_ERROR)
+    }
+}
+
+impl JavaWriteable for Error {
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.0.write_to(w)
+    }
+}
+
+static CLASS_OF_RUNTIME_EXCEPTION: Lazy<Class> = Lazy::new(|| {
+    Class::builder("java.lang.RuntimeException", -7034897190745766939)
+        .super_class(Clone::clone(&CLASS_OF_EXCEPTION))
+        .build()
+});
+
+struct RuntimeExceptionInner;
+
+impl JavaObject for RuntimeExceptionInner {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_RUNTIME_EXCEPTION)
+    }
+}
+
+impl JavaSerializable for RuntimeExceptionInner {
+    fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct RuntimeException(ExtendsLayout<RuntimeExceptionInner, Exception>);
+
+impl JavaObject for RuntimeException {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_RUNTIME_EXCEPTION)
+    }
+}
+
+impl JavaWriteable for RuntimeException {
+    fn write_to(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        unimplemented!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn test_stack_trace_element() -> io::Result<()> {
+    fn test_java_lang_stack_trace_element() -> io::Result<()> {
         init();
 
         let st = StackTraceElement::builder(
@@ -317,9 +392,11 @@ mod tests {
     }
 
     #[test]
-    fn test_throwable() -> io::Result<()> {
+    fn test_java_lang_throwable() -> io::Result<()> {
         init();
 
+        // ===== com/example/ThrowableDemo.java =====
+        //
         // package com.example;
         //
         // import org.apache.commons.codec.binary.Hex;
@@ -363,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn test_exception() -> io::Result<()> {
+    fn test_java_lang_exception() -> io::Result<()> {
         init();
 
         // ===== com/example/ExceptionDemo.java =====
@@ -405,6 +482,51 @@ mod tests {
 
         assert_eq!(
             "aced0005737200136a6176612e6c616e672e457863657074696f6ed0fd1f3e1a3b1cc4020000787200136a6176612e6c616e672e5468726f7761626c65d5c635273977b8cb0300044c000563617573657400154c6a6176612f6c616e672f5468726f7761626c653b4c000d64657461696c4d6573736167657400124c6a6176612f6c616e672f537472696e673b5b000a737461636b547261636574001e5b4c6a6176612f6c616e672f537461636b5472616365456c656d656e743b4c001473757070726573736564457863657074696f6e737400104c6a6176612f7574696c2f4c6973743b787071007e000674000466616b657572001e5b4c6a6176612e6c616e672e537461636b5472616365456c656d656e743b02462a3c3cfd22390200007870000000017372001b6a6176612e6c616e672e537461636b5472616365456c656d656e746109c59a2636dd85020008420006666f726d617449000a6c696e654e756d6265724c000f636c6173734c6f616465724e616d6571007e00034c000e6465636c6172696e67436c61737371007e00034c000866696c654e616d6571007e00034c000a6d6574686f644e616d6571007e00034c000a6d6f64756c654e616d6571007e00034c000d6d6f64756c6556657273696f6e71007e000378700100000009740003617070740019636f6d2e6578616d706c652e457863657074696f6e44656d6f740012457863657074696f6e44656d6f2e6a6176617400046d61696e70707372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede020000787078",
+            hex::encode(&raw)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_java_lang_error() -> io::Result<()> {
+        init();
+
+        // ===== com/example/ErrorDemo.java =====
+        //
+        // package com.example;
+        //
+        // import org.apache.commons.codec.binary.Hex;
+        // import org.apache.commons.io.FileUtils;
+        //
+        // public class ErrorDemo {
+        //
+        //   public static void main(String[] args) throws Exception {
+        // 	   Error ex = new Error("fake");
+        //
+        // 	   byte[] raw = SerializationUtils.serialize(ex);
+        // 	   System.out.println("result: " + Hex.encodeHexString(raw));
+        //   }
+        //
+        // }
+
+        let stack =
+            StackTraceElement::builder("com.example.ErrorDemo", "main", "ErrorDemo.java", 9)
+                .format(FormatFlags::BUILTIN_CLASS_LOADER)
+                .class_loader_name("app")
+                .build();
+
+        let th = Throwable::builder()
+            .detail_message("fake")
+            .stack_trace(stack)
+            .build();
+
+        let ex = Error::new(th);
+
+        let raw = ex.to_bytes()?;
+
+        assert_eq!(
+            "aced00057372000f6a6176612e6c616e672e4572726f72451d36568b820e56020000787200136a6176612e6c616e672e5468726f7761626c65d5c635273977b8cb0300044c000563617573657400154c6a6176612f6c616e672f5468726f7761626c653b4c000d64657461696c4d6573736167657400124c6a6176612f6c616e672f537472696e673b5b000a737461636b547261636574001e5b4c6a6176612f6c616e672f537461636b5472616365456c656d656e743b4c001473757070726573736564457863657074696f6e737400104c6a6176612f7574696c2f4c6973743b787071007e000674000466616b657572001e5b4c6a6176612e6c616e672e537461636b5472616365456c656d656e743b02462a3c3cfd22390200007870000000017372001b6a6176612e6c616e672e537461636b5472616365456c656d656e746109c59a2636dd85020008420006666f726d617449000a6c696e654e756d6265724c000f636c6173734c6f616465724e616d6571007e00034c000e6465636c6172696e67436c61737371007e00034c000866696c654e616d6571007e00034c000a6d6574686f644e616d6571007e00034c000a6d6f64756c654e616d6571007e00034c000d6d6f64756c6556657273696f6e71007e000378700100000009740003617070740015636f6d2e6578616d706c652e4572726f7244656d6f74000e4572726f7244656d6f2e6a6176617400046d61696e70707372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede020000787078",
             hex::encode(&raw)
         );
 

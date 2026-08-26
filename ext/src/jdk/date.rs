@@ -118,7 +118,7 @@ mod tests {
         #[java(
             rename = "createdAt",
             signature = "Ljava/util/Date;",
-            with = "crate::Date"
+            with = "crate::java::util::Date"
         )]
         created_at: Option<u64>,
     }

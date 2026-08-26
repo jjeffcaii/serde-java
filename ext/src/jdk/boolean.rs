@@ -104,7 +104,7 @@ mod tests {
         serial_version_uid = 3043629198327648182
     )]
     struct BooleanDemo {
-        #[java(signature = "Ljava/lang/Boolean;", with = "crate::Boolean")]
+        #[java(signature = "Ljava/lang/Boolean;", with = "crate::java::lang::Boolean")]
         enabled: Option<bool>,
     }
 

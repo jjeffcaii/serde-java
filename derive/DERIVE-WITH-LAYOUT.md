@@ -2,7 +2,7 @@
 
 ## Goals
 
-1. add an attribute `with`, eg: `#[java(signature="Ljava/util/List;",with="serde_java_ext::ArrayList")]`
+1. add an attribute `with`, eg: `#[java(signature="Ljava/util/List;",with="serde_java_ext::java::util::ArrayList")]`
 2. `with` must implements `Layout` trait
 3. if `with="some_module::SomeLayout"` is specified, you should serialize field with
    `some_module::SomeLayout::layout(&origin_field).write_to(w)`

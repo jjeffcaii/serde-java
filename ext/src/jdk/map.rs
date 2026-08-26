@@ -197,9 +197,9 @@ mod tests {
     #[derive(Debug, JavaSerialize)]
     #[java(class="com.example.HashMapDemo",serial_version_uid=-5707132217429457092)]
     struct HashMapDemo {
-        #[java(signature = "Ljava/util/Map;", with = "crate::HashMap")]
+        #[java(signature = "Ljava/util/Map;", with = "crate::java::util::HashMap")]
         exts: Option<StdHashMap<String, String>>,
-        #[java(signature = "Ljava/util/Map;", with = "crate::HashMap")]
+        #[java(signature = "Ljava/util/Map;", with = "crate::java::util::HashMap")]
         scores: StdHashMap<i32, f64>,
     }
 

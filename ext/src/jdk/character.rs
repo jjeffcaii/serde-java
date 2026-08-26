@@ -84,7 +84,10 @@ mod test {
     #[derive(Debug, JavaSerialize)]
     #[java(class="com.example.CharacterDemo",serial_version_uid=-1413488344517812718)]
     struct CharacterDemo {
-        #[java(signature = "Ljava/lang/Character;", with = "crate::Character")]
+        #[java(
+            signature = "Ljava/lang/Character;",
+            with = "crate::java::lang::Character"
+        )]
         ch: Option<char>,
     }
 

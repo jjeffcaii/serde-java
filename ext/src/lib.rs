@@ -4,21 +4,11 @@
 #[macro_use]
 extern crate log;
 
-mod boolean;
-mod character;
-mod date;
-mod list;
-mod map;
-mod misc;
-mod number;
-mod throwable;
+mod jdk;
 
-pub use boolean::Boolean;
-pub use character::Character;
-pub use date::Date;
-pub use list::{ArrayList, EmptyList, LinkedList};
-pub use map::HashMap;
-pub use number::{Byte, Double, Float, Integer, Long, Short};
-pub use throwable::{
-    Exception, StackTraceElement, StackTraceElementBuilder, Throwable, ThrowableBuilder,
-};
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::jdk::*;
+}
+
+pub mod java;

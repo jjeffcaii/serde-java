@@ -233,9 +233,9 @@ mod tests {
     #[java(class="com.example.LinkedListDemo",serial_version_uid=-2897624825673425478)]
     struct LinkedListDemo {
         id: i32,
-        #[java(signature = "Ljava/util/List;", with = "crate::LinkedList")]
+        #[java(signature = "Ljava/util/List;", with = "crate::java::util::LinkedList")]
         names: Vec<String>,
-        #[java(signature = "Ljava/util/List;", with = "crate::LinkedList")]
+        #[java(signature = "Ljava/util/List;", with = "crate::java::util::LinkedList")]
         scores: Vec<f32>,
     }
 
@@ -294,9 +294,9 @@ mod tests {
     )]
     struct ArrayListDemo {
         id: i32,
-        #[java(signature = "Ljava/util/List;", with = "crate::ArrayList")]
+        #[java(signature = "Ljava/util/List;", with = "crate::java::util::ArrayList")]
         names: Option<Vec<String>>,
-        #[java(signature = "Ljava/util/List;", with = "crate::ArrayList")]
+        #[java(signature = "Ljava/util/List;", with = "crate::java::util::ArrayList")]
         scores: Option<Vec<i32>>,
     }
 

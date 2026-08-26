@@ -1,6 +1,6 @@
 use super::boolean::Boolean;
+use super::character::Character;
 use super::number::{Byte, Double, Float, Integer, Long, Short};
-use crate::Character;
 use serde_java::{JavaWriteable, Layout, ObjectWriter};
 use std::any::Any;
 use std::io;
