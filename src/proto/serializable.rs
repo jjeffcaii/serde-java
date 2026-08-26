@@ -50,6 +50,12 @@ pub trait JavaWriteable {
     }
 }
 
+impl JavaWriteable for () {
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        w.write(())
+    }
+}
+
 impl JavaWriteable for String {
     #[inline]
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {

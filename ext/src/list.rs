@@ -3,6 +3,7 @@ use serde_java::__private::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
 };
+use std::io::Write;
 use std::{fmt, io};
 
 static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
@@ -165,6 +166,24 @@ impl<'a, T> Layout<'a> for ArrayList<'a, T> {
     }
 }
 
+static CLASS_OF_EMPTY_LIST: Lazy<Class> =
+    Lazy::new(|| Class::builder("java.util.Collections$EmptyList", 8842843931221139166).build());
+
+#[derive(Default)]
+pub struct EmptyList;
+
+impl JavaObject for EmptyList {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_EMPTY_LIST)
+    }
+}
+
+impl JavaSerializable for EmptyList {
+    fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +192,21 @@ mod tests {
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
+    }
+
+    #[test]
+    fn test_empty_list() -> io::Result<()> {
+        init();
+
+        let l = EmptyList::default();
+        let raw = l.to_bytes()?;
+
+        assert_eq!(
+            "aced00057372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede0200007870",
+            hex::encode(&raw)
+        );
+
+        Ok(())
     }
 
     #[test]

@@ -1,8 +1,23 @@
 use std::cell::RefCell;
+use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 
 pub struct Reference<T>(pub(crate) Rc<RefCell<T>>);
+
+impl<T> fmt::Debug for Reference<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Reference")
+            .field("key", &self.key())
+            .finish()
+    }
+}
+
+impl<T> fmt::Display for Reference<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Reference({})", self.key())
+    }
+}
 
 impl<T> Reference<T> {
     #[inline]
@@ -132,6 +147,9 @@ mod tests {
         };
         // write self-reference
         r.borrow_mut().link.replace(Clone::clone(&r));
+
+        info!("reference: {:?}", r);
+        info!("reference: {}", r);
 
         let raw = r.to_bytes()?;
 
