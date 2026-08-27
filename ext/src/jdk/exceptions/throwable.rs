@@ -135,8 +135,8 @@ impl<'a> ThrowableBuilder<'a> {
 mod tests {
     use super::*;
 
-    use crate::jdk::FormatFlags;
-    use serde_java::{JavaWriteableExt, Pointer};
+    use super::super::FormatFlags;
+    use serde_java::{JavaWriteableExt, ReferenceID};
     use std::io;
 
     fn init() {
@@ -197,7 +197,7 @@ mod tests {
         .class_loader_name("app")
         .build();
 
-        let th = Throwable::<Pointer>::builder()
+        let th = Throwable::<ReferenceID>::builder()
             .detail_message("fake")
             .stack_trace(stack)
             .build();
@@ -205,8 +205,7 @@ mod tests {
         let th = Reference::new(th);
 
         // the field of cause is yourself
-        th.borrow_mut()
-            .set_cause(Reference::new(Pointer::from(th.key())));
+        th.borrow_mut().set_cause(Reference::new(th.id()));
 
         let raw = th.to_bytes()?;
 

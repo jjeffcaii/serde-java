@@ -1,5 +1,5 @@
-use serde_java::JavaSerialize;
 use serde_java::__private::bitflags::bitflags;
+use serde_java::JavaSerialize;
 
 bitflags! {
     #[derive(Default,Clone,Copy)]

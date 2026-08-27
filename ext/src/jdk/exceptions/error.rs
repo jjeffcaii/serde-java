@@ -1,8 +1,9 @@
+use super::stack_trace_element::StackTraceElement;
 use super::throwable::{CLASS_OF_THROWABLE, Throwable};
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
-    Class, Extends, ExtendsLayout, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter,
-    Reference,
+    Class, Extends, ExtendsLayout, JavaObject, JavaSerializable, ObjectWriter, Reference,
+    ReferenceID,
 };
 use std::io;
 
@@ -13,37 +14,121 @@ static CLASS_OF_ERROR: Lazy<Class> = Lazy::new(|| {
 });
 
 #[derive(Default)]
-struct ErrorInner;
+struct Inner;
 
-impl JavaObject for ErrorInner {
+impl JavaObject for Inner {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_ERROR)
     }
 }
 
-impl JavaSerializable for ErrorInner {
+impl JavaSerializable for Inner {
     fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
 }
 
-pub struct Error(ExtendsLayout<ErrorInner, Reference<Throwable>>);
+pub struct Error<C>(ExtendsLayout<Inner, Throwable<C>>);
 
-impl Error {
-    pub fn new(parent: Reference<Throwable>) -> Self {
-        Self(ErrorInner::default().extends(parent))
+impl<C> Error<C> {
+    pub(crate) fn new(parent: Throwable<C>) -> Self {
+        Self(Inner::default().extends(parent))
+    }
+
+    pub fn builder<'a>() -> ErrorBuilder<'a> {
+        ErrorBuilder {
+            detail_message: None,
+            stack: vec![],
+        }
+    }
+
+    pub fn set_cause(&mut self, cause: Reference<C>) {
+        self.0.parent_mut().set_cause(cause);
     }
 }
 
-impl JavaObject for Error {
+impl<C> JavaObject for Error<C> {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_ERROR)
     }
 }
 
-impl JavaWriteable for Error {
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        self.0.write_to(w)
+impl<C> JavaSerializable for Error<C>
+where
+    C: JavaSerializable + JavaObject + 'static,
+{
+    fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.0.write_object(w)
+    }
+}
+
+pub struct ErrorBuilder<'a> {
+    detail_message: Option<&'a str>,
+    stack: Vec<StackTraceElement>,
+}
+
+impl<'a> ErrorBuilder<'a> {
+    pub fn detail_message(mut self, message: &'a str) -> Self {
+        self.detail_message = Some(message);
+        self
+    }
+
+    pub fn stack_trace<T>(mut self, element: T) -> Self
+    where
+        T: Into<StackTraceElement>,
+    {
+        self.stack.push(element.into());
+        self
+    }
+
+    pub fn build(self) -> Reference<Error<ReferenceID>> {
+        let e = {
+            let c: Error<ReferenceID> = self.build_();
+            Reference::new(c)
+        };
+
+        // bind cause to self
+        {
+            let cause = Reference::from(e.id());
+            e.borrow_mut().set_cause(cause);
+        }
+
+        e
+    }
+
+    pub fn build_with_cause<C>(self, cause: &Reference<C>) -> Error<C> {
+        let mut ex = self.build_::<C>();
+
+        ex.set_cause(Clone::clone(cause));
+
+        ex
+    }
+
+    fn build_<C>(self) -> Error<C> {
+        let Self {
+            detail_message,
+            stack,
+        } = self;
+
+        let th: Throwable<C> = {
+            let mut bu = Throwable::<C>::builder();
+
+            if let Some(s) = detail_message {
+                bu = bu.detail_message(s);
+            }
+
+            for next in stack {
+                bu = bu.stack_trace(next);
+            }
+
+            bu.build()
+        };
+
+        Error::new(th)
     }
 }
 
@@ -52,7 +137,7 @@ mod tests {
     use super::*;
 
     use crate::jdk::exceptions::{FormatFlags, StackTraceElement};
-    use serde_java::JavaWriteableExt;
+    use serde_java::{JavaWriteableExt, ReferenceID};
     use std::io;
 
     fn init() {
@@ -87,12 +172,10 @@ mod tests {
                 .class_loader_name("app")
                 .build();
 
-        let th = Throwable::builder()
+        let ex = Error::<ReferenceID>::builder()
             .detail_message("fake")
             .stack_trace(stack)
             .build();
-
-        let ex = Error::new(th);
 
         let raw = ex.to_bytes()?;
 

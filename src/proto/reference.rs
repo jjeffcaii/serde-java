@@ -29,8 +29,13 @@ impl<T> Reference<T> {
         Self(Rc::new(RefCell::new(t)))
     }
 
+    pub fn id(&self) -> ReferenceID {
+        let key = self.key();
+        ReferenceID(key)
+    }
+
     #[inline]
-    pub fn key(&self) -> usize {
+    pub(crate) fn key(&self) -> usize {
         Rc::as_ptr(&self.0) as usize
     }
 }
@@ -56,35 +61,15 @@ impl<T> Clone for Reference<T> {
     }
 }
 
-pub struct Pointer(usize);
+pub struct ReferenceID(usize);
 
-impl From<usize> for Pointer {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-
-impl Into<usize> for Pointer {
-    fn into(self) -> usize {
-        self.0
-    }
-}
-
-impl Deref for Pointer {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl JavaObject for Pointer {
+impl JavaObject for ReferenceID {
     fn class() -> Class {
         unreachable!()
     }
 }
 
-impl JavaSerializable for Pointer {
+impl JavaSerializable for ReferenceID {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         unreachable!()
     }
@@ -98,7 +83,7 @@ where
         let borrowed = &*self.0.borrow();
 
         // 1. write reference key directly for T:Key
-        if let Some(k) = (borrowed as &dyn Any).downcast_ref::<Pointer>() {
+        if let Some(k) = (borrowed as &dyn Any).downcast_ref::<ReferenceID>() {
             match w.object_handles.get(&k.0) {
                 None => panic!("cannot found ref"),
                 Some(h) => {

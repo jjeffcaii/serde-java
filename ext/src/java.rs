@@ -2,7 +2,7 @@ pub mod lang {
     pub use crate::jdk::Boolean;
     pub use crate::jdk::Character;
     pub use crate::jdk::{Byte, Double, Float, Integer, Long, Short};
-    pub use crate::jdk::{StackTraceElement, Throwable};
+    pub use crate::jdk::{Error, Exception, RuntimeException, StackTraceElement, Throwable};
 }
 
 pub mod util {

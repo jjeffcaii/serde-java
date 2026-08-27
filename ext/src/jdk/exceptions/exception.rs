@@ -1,7 +1,9 @@
+use super::stack_trace_element::StackTraceElement;
 use super::throwable::{CLASS_OF_THROWABLE, Throwable};
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
     Class, Extends, ExtendsLayout, JavaObject, JavaSerializable, ObjectWriter, Reference,
+    ReferenceID,
 };
 use std::io;
 
@@ -12,25 +14,32 @@ pub(crate) static CLASS_OF_EXCEPTION: Lazy<Class> = Lazy::new(|| {
 });
 
 #[derive(Default)]
-struct ExceptionInner {}
+struct Inner {}
 
-impl JavaObject for ExceptionInner {
+impl JavaObject for Inner {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_EXCEPTION)
     }
 }
 
-impl JavaSerializable for ExceptionInner {
+impl JavaSerializable for Inner {
     fn write_fields(&self, _: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
 }
 
-pub struct Exception<C>(ExtendsLayout<ExceptionInner, Throwable<C>>);
+pub struct Exception<C>(ExtendsLayout<Inner, Throwable<C>>);
 
 impl<C> Exception<C> {
-    pub fn new(parent: Throwable<C>) -> Self {
-        Exception(ExceptionInner::default().extends(parent))
+    pub(crate) fn new(parent: Throwable<C>) -> Self {
+        Exception(Inner::default().extends(parent))
+    }
+
+    pub fn builder<'a>() -> ExceptionBuilder<'a> {
+        ExceptionBuilder {
+            detail_message: None,
+            stack: vec![],
+        }
     }
 
     pub fn set_cause(&mut self, cause: Reference<C>) {
@@ -57,12 +66,76 @@ where
     }
 }
 
+pub struct ExceptionBuilder<'a> {
+    detail_message: Option<&'a str>,
+    stack: Vec<StackTraceElement>,
+}
+
+impl<'a> ExceptionBuilder<'a> {
+    pub fn detail_message(mut self, msg: &'a str) -> Self {
+        self.detail_message = Some(msg);
+        self
+    }
+
+    pub fn stack_trace<T>(mut self, element: T) -> Self
+    where
+        T: Into<StackTraceElement>,
+    {
+        self.stack.push(element.into());
+        self
+    }
+
+    pub fn build(self) -> Reference<Exception<ReferenceID>> {
+        let ex = Reference::new(self.build_::<ReferenceID>());
+
+        // bind cause to self
+        {
+            let cause = Reference::from(ex.id());
+            ex.borrow_mut().set_cause(cause);
+        }
+
+        ex
+    }
+
+    pub fn build_with_cause<C>(self, cause: &Reference<C>) -> Exception<C> {
+        let mut ex = self.build_::<C>();
+
+        ex.set_cause(Clone::clone(cause));
+
+        ex
+    }
+
+    #[inline]
+    fn build_<C>(self) -> Exception<C> {
+        let Self {
+            detail_message,
+            stack,
+        } = self;
+
+        let th: Throwable<C> = {
+            let mut bu = Throwable::<C>::builder();
+
+            if let Some(s) = detail_message {
+                bu = bu.detail_message(s);
+            }
+
+            for next in stack {
+                bu = bu.stack_trace(next);
+            }
+
+            bu.build()
+        };
+
+        Exception::new(th)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use super::super::stack_trace_element::{FormatFlags, StackTraceElement};
-    use serde_java::{JavaWriteableExt, Pointer};
+    use serde_java::JavaWriteableExt;
     use std::io;
 
     fn init() {
@@ -78,7 +151,7 @@ mod tests {
         // package com.example;
         //
         // import org.apache.commons.codec.binary.Hex;
-        // import org.apache.commons.io.FileUtils;
+        // import org.apache.commons.lang3.SerializationUtils;
         //
         // public class ExceptionDemo {
         //
@@ -101,13 +174,10 @@ mod tests {
         .class_loader_name("app")
         .build();
 
-        let th = Throwable::<Pointer>::builder()
+        let ex = Exception::<ReferenceID>::builder()
             .detail_message("fake")
             .stack_trace(stack)
             .build();
-        let ex = Reference::new(Exception::<Pointer>::new(th));
-        ex.borrow_mut()
-            .set_cause(Reference::new(Pointer::from(ex.key())));
 
         let raw = ex.to_bytes()?;
 
