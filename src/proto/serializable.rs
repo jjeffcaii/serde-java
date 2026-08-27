@@ -1,7 +1,6 @@
 use super::class::Class;
 use super::object::Object;
 use super::writer::{ArrayWriter, ObjectWriter, Writer};
-use crate::proto::reference::Reference;
 use std::io;
 
 pub trait JavaObject {
@@ -27,8 +26,19 @@ pub trait JavaSerializable {
 pub trait JavaWriteable {
     /// serialize object to writer.
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()>;
+}
 
+pub trait JavaWriteableExt {
     /// serialize object to bytes.
+    fn to_bytes(&self) -> io::Result<Vec<u8>>;
+
+    /// Serialize object then write to file.
+    fn to_file<P>(&self, path: P) -> io::Result<()>
+    where
+        P: AsRef<std::path::Path>;
+}
+
+impl<T: JavaWriteable> JavaWriteableExt for T {
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
         let mut b = Vec::<u8>::new();
         let mut w = ObjectWriter::new(&mut b)?;
@@ -37,7 +47,6 @@ pub trait JavaWriteable {
         Ok(b)
     }
 
-    /// Serialize object then write to file.
     fn to_file<P>(&self, path: P) -> io::Result<()>
     where
         P: AsRef<std::path::Path>,
@@ -282,25 +291,6 @@ where
         let class = Self::class();
 
         let obj = Object::<T, ()>::builder(class, self).build();
-
-        obj.write_to(w)?;
-
-        Ok(())
-    }
-}
-
-impl<T> JavaWriteable for Reference<T>
-where
-    T: JavaSerializable + JavaObject,
-{
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let key = self.key();
-
-        let class = T::class();
-
-        let borrowed = self.0.borrow();
-
-        let obj = Object::<T, ()>::builder(class, &borrowed).key(key).build();
 
         obj.write_to(w)?;
 

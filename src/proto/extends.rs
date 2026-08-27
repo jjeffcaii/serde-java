@@ -33,6 +33,14 @@ impl<T, P> ExtendsLayout<T, P> {
     pub fn parent(&self) -> &P {
         &self.parent
     }
+
+    pub fn this_mut(&mut self) -> &mut T {
+        &mut self.this
+    }
+
+    pub fn parent_mut(&mut self) -> &mut P {
+        &mut self.parent
+    }
 }
 
 impl<T, P> Debug for ExtendsLayout<T, P>
@@ -70,24 +78,45 @@ where
     }
 }
 
-impl<T, P> JavaWriteable for ExtendsLayout<T, Reference<P>>
+/// Lets a `Xxx(ExtendsLayout<Inner, Parent>)` wrapper type delegate its own
+/// `JavaSerializable` to this impl, so it can be nested (e.g. inside `Reference<T>`)
+/// rather than only usable as a top-level `JavaWriteable`.
+impl<T, P> JavaSerializable for ExtendsLayout<T, P>
 where
     T: JavaSerializable + JavaObject,
     P: JavaSerializable + JavaObject,
 {
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let parent = self.parent.borrow();
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.this.write_fields(w)
+    }
 
-        let obj = Object::<T, P>::builder(T::class(), &self.this)
-            .key(self.parent.key())
-            .extends(P::class(), &parent)
-            .build();
-
-        obj.write_to(w)?;
-
-        Ok(())
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.parent.write_object(w)?;
+        if P::class().flags().contains(ClassFlags::WRITE_METHOD) {
+            w.end()?;
+        }
+        self.this.write_object(w)
     }
 }
+
+// impl<T, P> JavaWriteable for ExtendsLayout<T, Reference<P>>
+// where
+//     T: JavaSerializable + JavaObject,
+//     P: JavaSerializable + JavaObject,
+// {
+//     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+//         let parent = self.parent.borrow();
+//
+//         let obj = Object::<T, P>::builder(T::class(), &self.this)
+//             .key(self.parent.key())
+//             .extends(P::class(), &parent)
+//             .build();
+//
+//         obj.write_to(w)?;
+//
+//         Ok(())
+//     }
+// }
 
 // C extends B extends A
 impl<C, B, A> JavaWriteable for ExtendsLayout<C, ExtendsLayout<B, A>>
@@ -150,7 +179,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Class, Field, Writer};
+    use crate::{Class, Field, JavaWriteableExt, Writer};
     use once_cell::sync::Lazy;
 
     struct PojoA {

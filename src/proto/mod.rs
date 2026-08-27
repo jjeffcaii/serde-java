@@ -8,8 +8,8 @@ mod writer;
 pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind};
 pub use extends::{Extends, ExtendsLayout};
 pub use object::{Object, ObjectBuilder};
-pub use reference::Reference;
-pub use serializable::{JavaObject, JavaSerializable, JavaWriteable};
+pub use reference::{Reference, Pointer};
+pub use serializable::{JavaObject, JavaSerializable, JavaWriteable, JavaWriteableExt};
 pub use writer::{ArrayWriter, ObjectWriter, Writer};
 
 #[cfg(test)]

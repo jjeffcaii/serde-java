@@ -3,7 +3,6 @@ use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
 };
-use std::io::Write;
 use std::{fmt, io};
 
 static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
@@ -179,7 +178,7 @@ impl JavaObject for EmptyList {
 }
 
 impl JavaSerializable for EmptyList {
-    fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn Write>) -> io::Result<()> {
+    fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
 }
@@ -187,7 +186,7 @@ impl JavaSerializable for EmptyList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_java::JavaSerialize;
+    use serde_java::{JavaSerialize, JavaWriteableExt};
     use std::io;
 
     fn init() {

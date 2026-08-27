@@ -1,5 +1,9 @@
+use super::{JavaObject, JavaSerializable, JavaWriteable, Object, ObjectWriter};
+use crate::Class;
+use std::any::Any;
 use std::cell::RefCell;
 use std::fmt;
+use std::io;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -26,7 +30,7 @@ impl<T> Reference<T> {
     }
 
     #[inline]
-    pub(crate) fn key(&self) -> usize {
+    pub fn key(&self) -> usize {
         Rc::as_ptr(&self.0) as usize
     }
 }
@@ -52,10 +56,75 @@ impl<T> Clone for Reference<T> {
     }
 }
 
+pub struct Pointer(usize);
+
+impl From<usize> for Pointer {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl Into<usize> for Pointer {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl Deref for Pointer {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl JavaObject for Pointer {
+    fn class() -> Class {
+        unreachable!()
+    }
+}
+
+impl JavaSerializable for Pointer {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        unreachable!()
+    }
+}
+
+impl<T> JavaWriteable for Reference<T>
+where
+    T: JavaSerializable + JavaObject + 'static,
+{
+    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let borrowed = &*self.0.borrow();
+
+        // 1. write reference key directly for T:Key
+        if let Some(k) = (borrowed as &dyn Any).downcast_ref::<Pointer>() {
+            match w.object_handles.get(&k.0) {
+                None => panic!("cannot found ref"),
+                Some(h) => {
+                    return w.write_reference(*h);
+                }
+            }
+        }
+
+        // 2. write automatically
+        let key = self.key();
+        let class = T::class();
+        let obj = Object::<T, ()>::builder(class, &borrowed).key(key).build();
+
+        obj.write_to(w)?;
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Class, Field, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter, Writer};
+    use crate::{
+        Class, Field, JavaObject, JavaSerializable, JavaWriteable, JavaWriteableExt, ObjectWriter,
+        Writer,
+    };
     use anyhow::Result;
     use once_cell::sync::Lazy;
     use std::io;

@@ -60,7 +60,7 @@ impl<'a> Layout<'a> for Character {
 #[cfg(test)]
 mod test {
     use super::*;
-    use serde_java::JavaSerialize;
+    use serde_java::{JavaSerialize, JavaWriteableExt};
     use std::io;
 
     fn init() {

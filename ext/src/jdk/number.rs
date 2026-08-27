@@ -173,6 +173,8 @@ define_number!(
 mod tests {
     use super::*;
 
+    use serde_java::JavaWriteableExt;
+
     fn init() {
         pretty_env_logger::try_init_timed().ok();
     }

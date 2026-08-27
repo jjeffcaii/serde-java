@@ -166,7 +166,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_java::JavaSerialize;
+    use serde_java::{JavaSerialize, JavaWriteableExt};
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
