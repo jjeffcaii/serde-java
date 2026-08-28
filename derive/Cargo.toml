@@ -10,6 +10,7 @@ description = "Derive macros for serde-java."
 include = [
     "src/**/*.rs",
     "Cargo.toml",
+    "LICENSE",
 ]
 
 [lib]

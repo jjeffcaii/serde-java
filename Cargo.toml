@@ -17,6 +17,7 @@ include = [
     "examples/**/*.rs",
     "Cargo.toml",
     "README.md",
+    "LICENSE",
 ]
 
 [build-dependencies]

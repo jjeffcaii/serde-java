@@ -10,6 +10,7 @@ description = "Pre-built Java serialization support for common JDK types."
 include = [
     "src/**/*.rs",
     "Cargo.toml",
+    "LICENSE",
 ]
 
 [dependencies]
