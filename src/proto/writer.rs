@@ -638,8 +638,9 @@ impl<W: io::Write> ObjectWriter<W> {
     pub(crate) fn write_string(&mut self, s: &str) -> io::Result<u32> {
         self.flush()?;
         if let Some(&h) = self.string_handles.get(s) {
-            self.write_reference(h)?;
-            debug!("write reference#{}: {}", h - BASE_WIRE_HANDLE, s);
+            self.put_u8(TC_REFERENCE)?;
+            self.put_u32(h)?;
+            debug!("write string '{}' as reference {}", s, h);
             return Ok(h);
         }
         let (bytes, _chars) = to_modified_utf8(s);

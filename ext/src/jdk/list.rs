@@ -181,6 +181,10 @@ impl JavaSerializable for EmptyList {
     fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         Ok(())
     }
+
+    fn virtual_ptr(&self) -> Option<usize> {
+        Some(usize::MAX - 1) // fixed pointer
+    }
 }
 
 #[cfg(test)]
