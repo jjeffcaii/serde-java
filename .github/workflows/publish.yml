@@ -1,0 +1,34 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Verify tag matches Cargo.toml versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          for manifest in Cargo.toml derive/Cargo.toml ext/Cargo.toml; do
+            PKG_VERSION=$(grep -m1 '^version = ' "$manifest" | sed -E 's/version = "(.*)"/\1/')
+            if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::$manifest version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+              exit 1
+            fi
+          done
+      - name: Publish serde-java-derive
+        run: cargo publish -p serde-java-derive
+      - name: Publish serde-java
+        run: cargo publish -p serde-java
+      - name: Publish serde-java-ext
+        run: cargo publish -p serde-java-ext
