@@ -21,6 +21,7 @@ static CLASS_OF_HASH_MAP: Lazy<Class> = Lazy::new(|| {
 });
 
 pub struct HashMapOwned<K, V> {
+    capacity: i32,
     load_factor: f32,
     threshold: i32,
     inner: StdHashMap<K, V>,
@@ -30,7 +31,7 @@ impl<K, V> HashMapOwned<K, V> {
     pub fn builder(origin: StdHashMap<K, V>) -> HashMapOwnedBuilder<K, V> {
         HashMapOwnedBuilder {
             load_factor: DEFAULT_LOAD_FACTOR,
-            init_capacity: 0,
+            init_capacity: None,
             inner: origin,
         }
     }
@@ -56,22 +57,6 @@ impl<K, V> From<StdHashMap<K, V>> for HashMapOwned<K, V> {
     }
 }
 
-impl<K, V> HashMapOwned<K, V> {
-    #[inline]
-    fn capacity(&self) -> i32 {
-        if self.threshold > 0 {
-            self.threshold
-        } else {
-            DEFAULT_INIT_CAPACITY as i32
-        }
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
-}
-
 impl<K, V> JavaObject for HashMapOwned<K, V> {
     fn class() -> Class {
         Clone::clone(&CLASS_OF_HASH_MAP)
@@ -84,21 +69,15 @@ where
     V: 'static + JavaWriteable,
 {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let threshold = if self.threshold > 0 {
-            self.threshold
-        } else {
-            ((DEFAULT_INIT_CAPACITY as f32) * self.load_factor) as i32
-        };
-
         self.load_factor.write_to(w)?;
-        threshold.write_to(w)?;
+        self.threshold.write_to(w)?;
 
         Ok(())
     }
 
     fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let buckets = self.capacity();
-        let size = self.len() as i32;
+        let buckets = self.capacity;
+        let size = self.inner.len() as i32;
 
         self.default_write_object(w)?;
 
@@ -116,7 +95,7 @@ where
 
 pub struct HashMapOwnedBuilder<K, V> {
     load_factor: f32,
-    init_capacity: usize,
+    init_capacity: Option<usize>,
     inner: StdHashMap<K, V>,
 }
 
@@ -127,28 +106,41 @@ impl<K, V> HashMapOwnedBuilder<K, V> {
     }
 
     pub fn init_capacity(mut self, init_capacity: usize) -> Self {
-        self.init_capacity = init_capacity;
+        self.init_capacity = Some(init_capacity);
         self
     }
 
+    #[inline]
     pub fn build(self) -> HashMapOwned<K, V> {
         let Self {
             load_factor,
-            mut init_capacity,
+            init_capacity,
             inner,
         } = self;
 
-        if init_capacity > MAXIMUM_CAPACITY {
-            init_capacity = MAXIMUM_CAPACITY;
-        }
-
-        let threshold = if init_capacity == 0 {
-            0
-        } else {
-            table_size_for(init_capacity) as i32
+        let (threshold, capacity) = match init_capacity {
+            None => {
+                if inner.is_empty() {
+                    (0i32, DEFAULT_INIT_CAPACITY)
+                } else {
+                    (
+                        ((DEFAULT_INIT_CAPACITY as f32) * DEFAULT_LOAD_FACTOR) as i32,
+                        DEFAULT_INIT_CAPACITY,
+                    )
+                }
+            }
+            Some(n) => {
+                let capacity = n.min(MAXIMUM_CAPACITY);
+                if inner.is_empty() {
+                    (0, capacity)
+                } else {
+                    (table_size_for(capacity) as i32, capacity)
+                }
+            }
         };
 
         HashMapOwned {
+            capacity: capacity as i32,
             load_factor,
             threshold,
             inner,
@@ -159,23 +151,8 @@ impl<K, V> HashMapOwnedBuilder<K, V> {
 pub struct HashMap<'a, K, V> {
     load_factor: f32,
     threshold: i32,
+    capacity: i32,
     inner: &'a StdHashMap<K, V>,
-}
-
-impl<'a, K, V> HashMap<'a, K, V> {
-    #[inline]
-    fn capacity(&self) -> i32 {
-        if self.threshold > 0 {
-            self.threshold
-        } else {
-            DEFAULT_INIT_CAPACITY as i32
-        }
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
 }
 
 impl<'a, K, V> From<&'a StdHashMap<K, V>> for HashMap<'a, K, V> {
@@ -194,7 +171,7 @@ impl<'a, K, V> Deref for HashMap<'a, K, V> {
 
 pub struct HashMapBuilder<'a, K, V> {
     load_factor: f32,
-    init_capacity: usize,
+    init_capacity: Option<usize>,
     inner: &'a StdHashMap<K, V>,
 }
 
@@ -205,28 +182,41 @@ impl<'a, K, V> HashMapBuilder<'a, K, V> {
     }
 
     pub fn init_capacity(mut self, init_capacity: usize) -> Self {
-        self.init_capacity = init_capacity;
+        self.init_capacity = Some(init_capacity);
         self
     }
 
+    #[inline]
     pub fn build(self) -> HashMap<'a, K, V> {
         let Self {
             load_factor,
-            mut init_capacity,
+            init_capacity,
             inner,
         } = self;
 
-        if init_capacity > MAXIMUM_CAPACITY {
-            init_capacity = MAXIMUM_CAPACITY;
-        }
-
-        let threshold = if init_capacity == 0 {
-            0
-        } else {
-            table_size_for(init_capacity) as i32
+        let (threshold, capacity) = match init_capacity {
+            None => {
+                if inner.is_empty() {
+                    (0i32, DEFAULT_INIT_CAPACITY)
+                } else {
+                    (
+                        ((DEFAULT_INIT_CAPACITY as f32) * DEFAULT_LOAD_FACTOR) as i32,
+                        DEFAULT_INIT_CAPACITY,
+                    )
+                }
+            }
+            Some(n) => {
+                let capacity = n.min(MAXIMUM_CAPACITY);
+                if inner.is_empty() {
+                    (0, capacity)
+                } else {
+                    (table_size_for(capacity) as i32, capacity)
+                }
+            }
         };
 
         HashMap {
+            capacity: capacity as i32,
             load_factor,
             threshold,
             inner,
@@ -234,26 +224,12 @@ impl<'a, K, V> HashMapBuilder<'a, K, V> {
     }
 }
 
-#[inline]
-fn table_size_for(capacity: usize) -> usize {
-    let cap = capacity as i32;
-    // Java's `>>>` uses only the low 5 bits of the shift distance for `int`.
-    let shift = cap.wrapping_sub(1).leading_zeros() & 31;
-    let n = ((-1i32 as u32) >> shift) as i32;
-    if n < 0 {
-        1
-    } else if (n as usize) >= MAXIMUM_CAPACITY {
-        MAXIMUM_CAPACITY
-    } else {
-        (n as usize) + 1
-    }
-}
-
 impl<'a, K, V> HashMap<'a, K, V> {
+    #[inline]
     pub fn builder(origin: &'a StdHashMap<K, V>) -> HashMapBuilder<'a, K, V> {
         HashMapBuilder {
             load_factor: DEFAULT_LOAD_FACTOR,
-            init_capacity: 0,
+            init_capacity: None,
             inner: origin,
         }
     }
@@ -271,26 +247,32 @@ where
     V: 'static + JavaWriteable,
 {
     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let threshold = if self.threshold > 0 {
-            self.threshold
-        } else {
-            ((DEFAULT_INIT_CAPACITY as f32) * self.load_factor) as i32
-        };
+        #[cfg(test)]
+        {
+            info!("load_factor: {:?}", self.load_factor);
+            info!("threshold: {:?}", self.threshold);
+        }
 
         self.load_factor.write_to(w)?;
-        threshold.write_to(w)?;
+        self.threshold.write_to(w)?;
 
         Ok(())
     }
 
     fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let buckets = self.capacity();
-        let size = self.len() as i32;
+        let buckets = self.capacity;
+        let size = self.inner.len() as i32;
 
         self.default_write_object(w)?;
 
         buckets.write_to(w)?;
         size.write_to(w)?;
+
+        #[cfg(test)]
+        {
+            info!("buckets: {:?}", buckets);
+            info!("size: {:?}", size);
+        }
 
         for (k, v) in self.inner {
             write_boxed(w, k)?;
@@ -314,6 +296,21 @@ where
     }
 }
 
+#[inline]
+fn table_size_for(capacity: usize) -> usize {
+    let cap = capacity as i32;
+    // Java's `>>>` uses only the low 5 bits of the shift distance for `int`.
+    let shift = cap.wrapping_sub(1).leading_zeros() & 31;
+    let n = ((-1i32 as u32) >> shift) as i32;
+    if n < 0 {
+        1
+    } else if (n as usize) >= MAXIMUM_CAPACITY {
+        MAXIMUM_CAPACITY
+    } else {
+        (n as usize) + 1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,23 +321,42 @@ mod tests {
     }
 
     #[test]
+    fn test_table() {
+        assert_eq!(32, table_size_for(20));
+        assert_eq!(16, table_size_for(16));
+    }
+
+    #[test]
     fn test_hashmap() -> io::Result<()> {
         init();
 
-        let origin = {
-            let mut m = StdHashMap::<String, String>::new();
-            m.insert("hello".to_string(), "world".to_string());
-            m
-        };
+        // empty
+        {
+            let empty = StdHashMap::<String, String>::new();
+            let raw = HashMap::layout(&empty).to_bytes()?;
 
-        let m = HashMap::builder(&origin).build();
+            assert_eq!(
+                "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f400000000000007708000000100000000078",
+                hex::encode(&raw)
+            );
+        }
 
-        let raw = m.to_bytes()?;
+        {
+            let origin = {
+                let mut m = StdHashMap::<String, String>::new();
+                m.insert("hello".to_string(), "world".to_string());
+                m
+            };
 
-        assert_eq!(
-            "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c6478",
-            hex::encode(&raw)
-        );
+            let m = HashMap::builder(&origin).build();
+
+            let raw = m.to_bytes()?;
+
+            assert_eq!(
+                "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c6478",
+                hex::encode(&raw)
+            );
+        }
 
         Ok(())
     }
