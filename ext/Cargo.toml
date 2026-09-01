@@ -1,6 +1,6 @@
 [package]
 name = "serde-java-ext"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Jeffsky Tsai <jjeffcaii@outlook.com>"]
@@ -14,7 +14,7 @@ include = [
 ]
 
 [dependencies]
-serde-java = { version = "0.0.1", path = ".." }
+serde-java = { version = "0.0.2", path = ".." }
 
 [dev-dependencies]
 log = "0.4"

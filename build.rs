@@ -6,11 +6,6 @@ use std::path::Path;
 fn main() {
     string_cache_codegen::AtomType::new("astr::AtomString", "astr!")
         .atoms(&[
-            // common fields
-            "id",
-            "size",
-            // primitive types
-            "[B",
             // class names
             "java.lang.Object",
             "java.lang.Boolean",
@@ -24,6 +19,15 @@ fn main() {
             "java.util.ArrayList",
             "java.util.LinkedList",
             // class signatures
+            "[B",
+            "[C",
+            "[Z",
+            "[S",
+            "[I",
+            "[J",
+            "[D",
+            "[F",
+            "[Ljava/lang/String;",
             "Ljava/lang/Object;",
             "Ljava/lang/Boolean;",
             "Ljava/lang/Byte;",
