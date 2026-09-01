@@ -28,10 +28,10 @@ cache, a message payload, a persisted blob.
 
 ```toml
 [dependencies]
-serde-java = "0.0.2"
+serde-java = "0.0.3"
 
 # optional: pre-built JDK types (java.lang.Integer, java.util.ArrayList, …)
-serde-java-ext = "0.0.2"
+serde-java-ext = "0.0.3"
 ```
 
 Requires a Rust toolchain supporting edition 2024.
