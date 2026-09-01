@@ -2,6 +2,13 @@
 
 # serde-java
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jjeffcaii/serde-java/rust.yml)
+[![Codecov](https://img.shields.io/codecov/c/github/jjeffcaii/serde-java)](https://app.codecov.io/gh/jjeffcaii/serde-java)
+[![Crates.io Version](https://img.shields.io/crates/v/serde-java)](https://crates.io/crates/serde-java)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/serde-java)](https://crates.io/crates/serde-java)
+![GitHub Tag](https://img.shields.io/github/v/tag/jjeffcaii/serde-java)
+![GitHub License](https://img.shields.io/github/license/jjeffcaii/serde-java)
+
 A Rust implementation of the [Java Object Serialization Stream Protocol][spec] — the byte format produced by
 `java.io.ObjectOutputStream` (magic `AC ED 00 05`).
 
