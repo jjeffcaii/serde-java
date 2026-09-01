@@ -7,6 +7,6 @@ pub mod lang {
 
 pub mod util {
     pub use crate::jdk::Date;
-    pub use crate::jdk::{ArrayList, LinkedList};
-    pub use crate::jdk::{HashMap, HashMapBuilder};
+    pub use crate::jdk::{ArrayList, ArrayListOwned, LinkedList, LinkedListOwned};
+    pub use crate::jdk::{HashMap, HashMapBuilder, HashMapOwned, HashMapOwnedBuilder};
 }

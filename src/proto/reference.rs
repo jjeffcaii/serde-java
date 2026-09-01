@@ -95,7 +95,7 @@ where
         // 2. write automatically
         let key = self.key();
         let class = T::class();
-        let obj = Object::<T, ()>::builder(class, &borrowed).key(key).build();
+        let obj = Object::<T, ()>::builder(class, borrowed).key(key).build();
 
         obj.write_to(w)?;
 

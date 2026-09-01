@@ -11,6 +11,72 @@ static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
+pub struct LinkedListOwned<T>(pub Vec<T>);
+
+impl<T> From<Vec<T>> for LinkedListOwned<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> Into<Vec<T>> for LinkedListOwned<T> {
+    fn into(self) -> Vec<T> {
+        self.0
+    }
+}
+
+impl<T> fmt::Debug for LinkedListOwned<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(CLASS_OF_LINKED_LIST.name())?;
+        f.debug_list().entries(self.0.iter()).finish()
+    }
+}
+
+impl<T> fmt::Display for LinkedListOwned<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for (i, next) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            fmt::Display::fmt(next, f)?;
+        }
+        f.write_str("]")
+    }
+}
+
+impl<T> JavaObject for LinkedListOwned<T> {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_LINKED_LIST)
+    }
+}
+
+impl<T> JavaSerializable for LinkedListOwned<T>
+where
+    T: 'static + JavaWriteable,
+{
+    fn write_fields(&self, _w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.default_write_object(w)?;
+
+        (self.0.len() as i32).write_to(w)?;
+
+        for next in &self.0 {
+            write_boxed(w, next)?;
+        }
+
+        Ok(())
+    }
+}
 pub struct LinkedList<'a, T>(pub &'a [T]);
 
 impl<'a, T> fmt::Debug for LinkedList<'a, T>
@@ -87,6 +153,74 @@ static CLASS_OF_ARRAY_LIST: Lazy<Class> = Lazy::new(|| {
         .field(Field::builder("size").int())
         .build()
 });
+
+pub struct ArrayListOwned<T>(pub Vec<T>);
+
+impl<T> fmt::Debug for ArrayListOwned<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(CLASS_OF_ARRAY_LIST.name())?;
+        f.debug_list().entries(self.0.iter()).finish()
+    }
+}
+
+impl<T> fmt::Display for ArrayListOwned<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for (i, next) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            fmt::Display::fmt(next, f)?;
+        }
+        f.write_str("]")
+    }
+}
+
+impl<T> From<Vec<T>> for ArrayListOwned<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> Into<Vec<T>> for ArrayListOwned<T> {
+    fn into(self) -> Vec<T> {
+        self.0
+    }
+}
+
+impl<T> JavaObject for ArrayListOwned<T> {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_ARRAY_LIST)
+    }
+}
+
+impl<T> JavaSerializable for ArrayListOwned<T>
+where
+    T: 'static + JavaWriteable,
+{
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        (self.0.len() as i32).write_to(w)?;
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        self.default_write_object(w)?;
+
+        (self.0.len() as i32).write_to(w)?;
+
+        for next in &self.0 {
+            write_boxed(w, next)?;
+        }
+
+        Ok(())
+    }
+}
 
 pub struct ArrayList<'a, T>(pub &'a [T]);
 
@@ -338,6 +472,42 @@ mod tests {
             assert_eq!(
                 "aced000573720019636f6d2e6578616d706c652e41727261794c69737444656d6f2bc387aed663f2e902000349000269644c00056e616d65737400104c6a6176612f7574696c2f4c6973743b4c000673636f72657371007e000178700000ffff737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000003770400000003740003666f6f740003626172740003717578787371007e000300000003770400000003737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b0200007870000000017371007e0009000000027371007e00090000000378",
                 hex::encode(&raw)
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_list_in_list() -> io::Result<()> {
+        init();
+
+        {
+            let l = LinkedListOwned::from(vec![
+                ArrayListOwned::from(vec![1i32]),
+                ArrayListOwned::from(vec![2, 22]),
+                ArrayListOwned::from(vec![3, 33, 333]),
+            ]);
+            let raw = l.to_bytes()?;
+
+            assert_eq!(
+                "aced0005737200146a6176612e7574696c2e4c696e6b65644c6973740c29535d4a6088220300007870770400000003737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a65787000000001770400000001737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787000000001787371007e0002000000027704000000027371007e0004000000027371007e000400000016787371007e0002000000037704000000037371007e0004000000037371007e0004000000217371007e00040000014d7878",
+                hex::encode(&raw),
+            );
+        }
+
+        {
+            let l = ArrayListOwned::from(vec![
+                ArrayListOwned::from(vec![1i32]),
+                ArrayListOwned::from(vec![2, 22]),
+                ArrayListOwned::from(vec![3, 33, 333]),
+            ]);
+
+            let raw = l.to_bytes()?;
+
+            assert_eq!(
+                "aced0005737200136a6176612e7574696c2e41727261794c6973747881d21d99c7619d03000149000473697a657870000000037704000000037371007e000000000001770400000001737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787000000001787371007e0000000000027704000000027371007e0003000000027371007e000300000016787371007e0000000000037704000000037371007e0003000000037371007e0003000000217371007e00030000014d7878",
+                hex::encode(&raw),
             );
         }
 

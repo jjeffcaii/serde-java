@@ -727,6 +727,17 @@ impl<W: io::Write> ObjectWriter<W> {
 }
 
 impl<W: io::Write> ObjectWriter<W> {
+    /// Write original bytes directly
+    #[inline]
+    pub fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+        if self.blkmode {
+            use io::Write as _;
+            self.blk.write_all(bytes)
+        } else {
+            self.w.write_all(bytes)
+        }
+    }
+
     #[inline]
     pub fn begin_object(&mut self, class: &Class) -> io::Result<u32> {
         self.flush()?;

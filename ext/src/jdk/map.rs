@@ -6,6 +6,7 @@ use serde_java::{
 use std::collections::HashMap as StdHashMap;
 use std::hash::Hash;
 use std::io;
+use std::ops::Deref;
 
 const DEFAULT_LOAD_FACTOR: f32 = 0.75;
 const DEFAULT_INIT_CAPACITY: usize = 16;
@@ -18,6 +19,142 @@ static CLASS_OF_HASH_MAP: Lazy<Class> = Lazy::new(|| {
         .field(Field::builder("threshold").int())
         .build()
 });
+
+pub struct HashMapOwned<K, V> {
+    load_factor: f32,
+    threshold: i32,
+    inner: StdHashMap<K, V>,
+}
+
+impl<K, V> HashMapOwned<K, V> {
+    pub fn builder(origin: StdHashMap<K, V>) -> HashMapOwnedBuilder<K, V> {
+        HashMapOwnedBuilder {
+            load_factor: DEFAULT_LOAD_FACTOR,
+            init_capacity: 0,
+            inner: origin,
+        }
+    }
+}
+
+impl<K, V> Into<StdHashMap<K, V>> for HashMapOwned<K, V> {
+    fn into(self) -> StdHashMap<K, V> {
+        self.inner
+    }
+}
+
+impl<K, V> Deref for HashMapOwned<K, V> {
+    type Target = StdHashMap<K, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<K, V> From<StdHashMap<K, V>> for HashMapOwned<K, V> {
+    fn from(value: StdHashMap<K, V>) -> Self {
+        Self::builder(value).build()
+    }
+}
+
+impl<K, V> HashMapOwned<K, V> {
+    #[inline]
+    fn capacity(&self) -> i32 {
+        if self.threshold > 0 {
+            self.threshold
+        } else {
+            DEFAULT_INIT_CAPACITY as i32
+        }
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V> JavaObject for HashMapOwned<K, V> {
+    fn class() -> Class {
+        Clone::clone(&CLASS_OF_HASH_MAP)
+    }
+}
+
+impl<K, V> JavaSerializable for HashMapOwned<K, V>
+where
+    K: 'static + JavaWriteable + Eq + Hash,
+    V: 'static + JavaWriteable,
+{
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let threshold = if self.threshold > 0 {
+            self.threshold
+        } else {
+            ((DEFAULT_INIT_CAPACITY as f32) * self.load_factor) as i32
+        };
+
+        self.load_factor.write_to(w)?;
+        threshold.write_to(w)?;
+
+        Ok(())
+    }
+
+    fn write_object(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+        let buckets = self.capacity();
+        let size = self.len() as i32;
+
+        self.default_write_object(w)?;
+
+        buckets.write_to(w)?;
+        size.write_to(w)?;
+
+        for (k, v) in &self.inner {
+            write_boxed(w, k)?;
+            write_boxed(w, v)?;
+        }
+
+        Ok(())
+    }
+}
+
+pub struct HashMapOwnedBuilder<K, V> {
+    load_factor: f32,
+    init_capacity: usize,
+    inner: StdHashMap<K, V>,
+}
+
+impl<K, V> HashMapOwnedBuilder<K, V> {
+    pub fn load_factory(mut self, load_factor: f32) -> Self {
+        self.load_factor = load_factor;
+        self
+    }
+
+    pub fn init_capacity(mut self, init_capacity: usize) -> Self {
+        self.init_capacity = init_capacity;
+        self
+    }
+
+    pub fn build(self) -> HashMapOwned<K, V> {
+        let Self {
+            load_factor,
+            mut init_capacity,
+            inner,
+        } = self;
+
+        if init_capacity > MAXIMUM_CAPACITY {
+            init_capacity = MAXIMUM_CAPACITY;
+        }
+
+        let threshold = if init_capacity == 0 {
+            0
+        } else {
+            table_size_for(init_capacity) as i32
+        };
+
+        HashMapOwned {
+            load_factor,
+            threshold,
+            inner,
+        }
+    }
+}
 
 pub struct HashMap<'a, K, V> {
     load_factor: f32,
@@ -38,6 +175,20 @@ impl<'a, K, V> HashMap<'a, K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.inner.len()
+    }
+}
+
+impl<'a, K, V> From<&'a StdHashMap<K, V>> for HashMap<'a, K, V> {
+    fn from(value: &'a StdHashMap<K, V>) -> Self {
+        Self::builder(value).build()
+    }
+}
+
+impl<'a, K, V> Deref for HashMap<'a, K, V> {
+    type Target = StdHashMap<K, V>;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner
     }
 }
 
@@ -229,6 +380,37 @@ mod tests {
 
         assert_eq!(
             "aced000573720017636f6d2e6578616d706c652e486173684d617044656d6fb0cc317c65ee073c0200024c00046578747374000f4c6a6176612f7574696c2f4d61703b4c000673636f72657371007e00017870737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c64787371007e00033f4000000000000c77080000001000000001737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787000000001737200106a6176612e6c616e672e446f75626c6580b3c24a296bfb0402000144000576616c75657871007e000940091eb851eb851f78",
+            hex::encode(&raw),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_map_in_map() -> io::Result<()> {
+        init();
+
+        let origin = {
+            let mut origin = StdHashMap::<String, HashMapOwned<String, i32>>::new();
+
+            let mut a = StdHashMap::<String, i32>::new();
+            a.insert("x".to_owned(), 1);
+
+            let mut b = StdHashMap::<String, i32>::new();
+            b.insert("y".to_owned(), 111);
+
+            origin.insert("a".to_owned(), HashMapOwned::from(a));
+            origin.insert("b".to_owned(), HashMapOwned::from(b));
+
+            origin
+        };
+
+        let m = HashMapOwned::from(origin);
+
+        let raw = m.to_bytes()?;
+
+        assert_eq!(
+            "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c77080000001000000002740001617371007e00003f4000000000000c7708000000100000000174000178737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b02000078700000000178740001627371007e00003f4000000000000c77080000001000000001740001797371007e00050000006f7878",
             hex::encode(&raw),
         );
 

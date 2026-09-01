@@ -65,10 +65,10 @@ impl<'a, I, P> Object<'a, I, P> {
 
         let old = w.set_block_data_mode(true);
 
-        if let Some(key) = key {
-            if let Some(h) = w.object_handles.get(key) {
-                return w.write_reference(*h);
-            }
+        if let Some(key) = key
+            && let Some(h) = w.object_handles.get(key)
+        {
+            return w.write_reference(*h);
         }
 
         let h = w.begin_object(class)?;

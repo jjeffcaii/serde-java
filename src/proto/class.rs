@@ -467,6 +467,11 @@ impl<'a> ClassBuilder<'a> {
         self
     }
 
+    pub fn sorted(mut self) -> ClassBuilder<'a> {
+        self.fields.sort();
+        self
+    }
+
     pub fn build(self) -> Class {
         let Self {
             name,
