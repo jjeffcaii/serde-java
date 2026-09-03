@@ -1,6 +1,8 @@
 mod class;
 mod extends;
+mod flags;
 mod object;
+mod reader;
 mod reference;
 mod serializable;
 mod writer;

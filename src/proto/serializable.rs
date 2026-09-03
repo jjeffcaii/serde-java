@@ -56,7 +56,7 @@ use std::io;
 /// let bytes = Point { x: 1, y: 2 }.to_bytes().unwrap();
 /// assert!(bytes.starts_with(&[0xAC, 0xED, 0x00, 0x05])); // stream magic
 /// ```
-pub trait JavaObject {
+pub trait JavaObject: Sized {
     /// Returns the Java `Class` descriptor for this type (name, serialVersionUID, field list, etc).
     ///
     /// May be called multiple times (once per object of this type written to a stream), so
