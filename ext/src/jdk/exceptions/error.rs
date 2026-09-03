@@ -28,7 +28,7 @@ impl JavaSerializable for Inner {
     }
 }
 
-pub struct Error<C>(ExtendsLayout<Inner, Throwable<C>>);
+pub struct Error<C = ReferenceID>(ExtendsLayout<Inner, Throwable<C>>);
 
 impl<C> Error<C> {
     pub(crate) fn new(parent: Throwable<C>) -> Self {

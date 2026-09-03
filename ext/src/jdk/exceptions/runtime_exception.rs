@@ -29,7 +29,7 @@ impl JavaSerializable for Inner {
     }
 }
 
-pub struct RuntimeException<C>(ExtendsLayout<Inner, Exception<C>>);
+pub struct RuntimeException<C = ReferenceID>(ExtendsLayout<Inner, Exception<C>>);
 
 impl<C> RuntimeException<C> {
     pub(crate) fn new(parent: Exception<C>) -> Self {

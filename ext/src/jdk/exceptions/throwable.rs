@@ -3,6 +3,7 @@ use super::stack_trace_element::StackTraceElement;
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
     Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, ObjectWriter, Reference,
+    ReferenceID,
 };
 use std::io;
 
@@ -16,7 +17,7 @@ pub(crate) static CLASS_OF_THROWABLE: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-pub struct Throwable<C> {
+pub struct Throwable<C = ReferenceID> {
     inner: Inner,
     cause: Option<Reference<C>>,
 }
