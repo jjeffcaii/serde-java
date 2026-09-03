@@ -17,11 +17,13 @@ pub(crate) static CLASS_OF_THROWABLE: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
+#[derive(Clone)]
 pub struct Throwable<C = ReferenceID> {
     inner: Inner,
     cause: Option<Reference<C>>,
 }
 
+#[derive(Clone)]
 pub struct Inner {
     detail_message: Option<String>,
     stack_trace: Vec<StackTraceElement>,

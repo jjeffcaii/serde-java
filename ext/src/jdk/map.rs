@@ -20,6 +20,7 @@ static CLASS_OF_HASH_MAP: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
+#[derive(Clone)]
 pub struct HashMapOwned<K, V> {
     capacity: i32,
     load_factor: f32,

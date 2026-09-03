@@ -13,7 +13,7 @@ static CLASS_OF_ERROR: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-#[derive(Default)]
+#[derive(Clone)]
 struct Inner;
 
 impl JavaObject for Inner {
@@ -28,11 +28,12 @@ impl JavaSerializable for Inner {
     }
 }
 
+#[derive(Clone)]
 pub struct Error<C = ReferenceID>(ExtendsLayout<Inner, Throwable<C>>);
 
 impl<C> Error<C> {
     pub(crate) fn new(parent: Throwable<C>) -> Self {
-        Self(Inner::default().extends(parent))
+        Self(Inner.extends(parent))
     }
 
     pub fn builder<'a>() -> ErrorBuilder<'a> {

@@ -307,8 +307,6 @@ mod tests {
 
         let c_b_a = c.extends(b.extends(a));
 
-        // c_b_a.to_file("/Users/jeffsky/Desktop/rust.ser")?;
-
         let raw = c_b_a.to_bytes()?;
 
         assert_eq!(

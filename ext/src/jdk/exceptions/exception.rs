@@ -13,8 +13,8 @@ pub(crate) static CLASS_OF_EXCEPTION: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-#[derive(Default)]
-struct Inner {}
+#[derive(Clone)]
+struct Inner;
 
 impl JavaObject for Inner {
     fn class() -> Class {
@@ -28,11 +28,12 @@ impl JavaSerializable for Inner {
     }
 }
 
+#[derive(Clone)]
 pub struct Exception<C = ReferenceID>(ExtendsLayout<Inner, Throwable<C>>);
 
 impl<C> Exception<C> {
     pub(crate) fn new(parent: Throwable<C>) -> Self {
-        Exception(Inner::default().extends(parent))
+        Exception(Inner.extends(parent))
     }
 
     pub fn builder<'a>() -> ExceptionBuilder<'a> {

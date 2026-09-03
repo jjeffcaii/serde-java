@@ -1,7 +1,6 @@
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{Class, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter};
-use std::fmt;
-use std::io::Write;
+use std::{fmt, io};
 
 /// Reference of java.lang.Character
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -43,7 +42,7 @@ impl JavaObject for Character {
 }
 
 impl JavaSerializable for Character {
-    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn Write>) -> std::io::Result<()> {
+    fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         self.0.write_to(w)
     }
 }

@@ -11,6 +11,7 @@ static CLASS_OF_LINKED_LIST: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
+#[derive(Clone)]
 pub struct LinkedListOwned<T>(pub Vec<T>);
 
 impl<T> From<Vec<T>> for LinkedListOwned<T> {
@@ -154,6 +155,7 @@ static CLASS_OF_ARRAY_LIST: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
+#[derive(Clone)]
 pub struct ArrayListOwned<T>(pub Vec<T>);
 
 impl<T> fmt::Debug for ArrayListOwned<T>

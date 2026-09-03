@@ -14,7 +14,7 @@ static CLASS_OF_RUNTIME_EXCEPTION: Lazy<Class> = Lazy::new(|| {
         .build()
 });
 
-#[derive(Default)]
+#[derive(Clone)]
 struct Inner;
 
 impl JavaObject for Inner {
@@ -29,11 +29,12 @@ impl JavaSerializable for Inner {
     }
 }
 
+#[derive(Clone)]
 pub struct RuntimeException<C = ReferenceID>(ExtendsLayout<Inner, Exception<C>>);
 
 impl<C> RuntimeException<C> {
     pub(crate) fn new(parent: Exception<C>) -> Self {
-        Self(Inner::default().extends(parent))
+        Self(Inner.extends(parent))
     }
 
     pub fn builder<'a>() -> RuntimeExceptionBuilder<'a> {
