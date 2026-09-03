@@ -16,22 +16,22 @@ It lets Rust code emit byte streams that a stock JVM can read back with `ObjectI
 involved**. Useful when a Rust service has to talk to something that only speaks Java serialization: an RPC endpoint, a
 cache, a message payload, a persisted blob.
 
-> **Status: early (`0.0.3`), write-only.** There is no deserializer — this crate encodes Rust values *into* the Java
+> **Status: early (`0.0.4`), write-only.** There is no deserializer — this crate encodes Rust values *into* the Java
 > format, it does not decode Java streams. See [Limitations](#limitations).
 
 ## Install
 
 | Crate                                                              | crates.io |
 | -------------------------------------------------------------------|-----------|
-| [`serde-java`](https://crates.io/crates/serde-java)                 | 0.0.3     |
-| [`serde-java-ext`](https://crates.io/crates/serde-java-ext)         | 0.0.3     |
+| [`serde-java`](https://crates.io/crates/serde-java)                 | 0.0.4     |
+| [`serde-java-ext`](https://crates.io/crates/serde-java-ext)         | 0.0.4     |
 
 ```toml
 [dependencies]
-serde-java = "0.0.3"
+serde-java = "0.0.4"
 
 # optional: pre-built JDK types (java.lang.Integer, java.util.ArrayList, …)
-serde-java-ext = "0.0.3"
+serde-java-ext = "0.0.4"
 ```
 
 Requires a Rust toolchain supporting edition 2024.

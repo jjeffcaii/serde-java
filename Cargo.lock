@@ -335,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "serde-java"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "serde-java-derive"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -365,7 +365,7 @@ dependencies = [
 
 [[package]]
 name = "serde-java-ext"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "hex",
  "log",

@@ -1,6 +1,6 @@
 [package]
 name = "serde-java-derive"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Jeffsky Tsai <jjeffcaii@outlook.com>"]
