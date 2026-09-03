@@ -344,6 +344,7 @@ dependencies = [
  "hex",
  "log",
  "once_cell",
+ "parking_lot",
  "pretty_env_logger",
  "serde-java-derive",
  "sha1",

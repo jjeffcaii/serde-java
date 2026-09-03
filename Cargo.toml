@@ -34,6 +34,7 @@ string_cache = "0.10"
 bitflags = "2.13"
 smallvec = { version = "1.15", features = ["write"] }
 sha1 = "0.11"
+parking_lot = "0.12"
 serde-java-derive = { version = "0.0.3", path = "derive", optional = true }
 
 [dev-dependencies]

@@ -1,13 +1,13 @@
 use super::{JavaObject, JavaSerializable, JavaWriteable, Object, ObjectWriter};
 use crate::Class;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::any::Any;
-use std::cell::RefCell;
 use std::fmt;
 use std::io;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
-pub struct Reference<T>(pub(crate) Rc<RefCell<T>>);
+pub struct Reference<T>(pub(crate) Arc<RwLock<T>>);
 
 impl<T> fmt::Debug for Reference<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,7 +26,7 @@ impl<T> fmt::Display for Reference<T> {
 impl<T> Reference<T> {
     #[inline]
     pub fn new(t: T) -> Self {
-        Self(Rc::new(RefCell::new(t)))
+        Self(Arc::new(RwLock::new(t)))
     }
 
     pub fn id(&self) -> ReferenceID {
@@ -36,7 +36,17 @@ impl<T> Reference<T> {
 
     #[inline]
     pub(crate) fn key(&self) -> usize {
-        Rc::as_ptr(&self.0) as usize
+        Arc::as_ptr(&self.0) as usize
+    }
+
+    #[inline]
+    pub fn borrow(&self) -> RwLockReadGuard<'_, T> {
+        self.0.read()
+    }
+
+    #[inline]
+    pub fn borrow_mut(&self) -> RwLockWriteGuard<'_, T> {
+        self.0.write()
     }
 }
 
@@ -47,7 +57,7 @@ impl<T> From<T> for Reference<T> {
 }
 
 impl<T> Deref for Reference<T> {
-    type Target = Rc<RefCell<T>>;
+    type Target = Arc<RwLock<T>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -80,7 +90,11 @@ where
     T: JavaSerializable + JavaObject + 'static,
 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let borrowed = &*self.0.borrow();
+        // Self-referential graphs (see `test_reference`) recurse back into this same
+        // lock while the outer read guard below is still held. parking_lot supports
+        // that as long as no writer is queued in between, which never happens here
+        // since serialization is single-threaded and only ever takes read locks.
+        let borrowed = &*self.0.read();
 
         // 1. write reference key directly for T:Key
         if let Some(k) = (borrowed as &dyn Any).downcast_ref::<ReferenceID>() {
@@ -149,6 +163,12 @@ mod tests {
 
             Ok(())
         }
+    }
+
+    #[test]
+    fn test_reference_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Reference<RefDemo>>();
     }
 
     fn init() {
