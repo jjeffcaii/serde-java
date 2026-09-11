@@ -38,9 +38,9 @@ impl<K, V> HashMapOwned<K, V> {
     }
 }
 
-impl<K, V> Into<StdHashMap<K, V>> for HashMapOwned<K, V> {
-    fn into(self) -> StdHashMap<K, V> {
-        self.inner
+impl<K, V> From<HashMapOwned<K, V>> for StdHashMap<K, V> {
+    fn from(val: HashMapOwned<K, V>) -> Self {
+        val.inner
     }
 }
 
@@ -380,6 +380,8 @@ mod tests {
             m.insert("hello".to_string(), "world".to_string());
             m
         };
+
+        #[allow(clippy::approx_constant)]
         let scores = {
             let mut m = StdHashMap::<i32, f64>::new();
             m.insert(1, 3.14);

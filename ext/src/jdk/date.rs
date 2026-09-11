@@ -15,15 +15,15 @@ impl Date {
     }
 }
 
-impl Into<u64> for Date {
-    fn into(self) -> u64 {
-        self.0
+impl From<Date> for u64 {
+    fn from(val: Date) -> Self {
+        val.0
     }
 }
 
-impl Into<SystemTime> for Date {
-    fn into(self) -> SystemTime {
-        let unix_millis = time::Duration::from_millis(self.0);
+impl From<Date> for SystemTime {
+    fn from(val: Date) -> Self {
+        let unix_millis = time::Duration::from_millis(val.0);
         SystemTime::UNIX_EPOCH.add(unix_millis)
     }
 }
@@ -97,7 +97,7 @@ mod tests {
 
         let value = Date::from(1787649130999); // 2026-08-25T17:12:10.999+0800
 
-        info!("date: {:?}", &value);
+        info!("date: {:?}", value);
 
         let raw = value.to_bytes()?;
 

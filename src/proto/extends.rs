@@ -1,5 +1,6 @@
-use super::object::Object;
-use super::serializable::{JavaObject, JavaSerializable, JavaWriteable};
+use super::JavaObject;
+use super::object::ObjectView;
+use super::serializable::{JavaSerializable, JavaWriteable};
 use super::writer::ObjectWriter;
 use crate::ClassFlags;
 use std::fmt::{Debug, Formatter};
@@ -68,7 +69,7 @@ where
     P: JavaSerializable + JavaObject,
 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let obj = Object::<T, P>::builder(T::class(), &self.this)
+        let obj = ObjectView::<T, P>::builder(T::class(), &self.this)
             .extends(P::class(), &self.parent)
             .build();
 

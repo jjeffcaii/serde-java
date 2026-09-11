@@ -1,20 +1,10 @@
 use super::flags::*;
 use crate::astr::AtomString;
 use crate::proto::class::TypeCode;
-use crate::{Class, ClassFlags, Field, FieldKind, JavaObject};
+use crate::{Class, ClassFlags, Field, FieldKind};
 use byteorder::{BigEndian, ReadBytesExt};
 use hashbrown::HashMap;
 use std::io::{self, BufRead as _, Read as _};
-
-pub trait Reader<T> {
-    fn read(&mut self) -> io::Result<T>;
-}
-
-pub trait JavaDeserializable: Sized {
-    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
-    where
-        R: io::Read;
-}
 
 pub struct ObjectReader<R> {
     r: io::BufReader<R>,
@@ -96,52 +86,52 @@ where
     }
 
     #[inline]
-    fn get_i8(&mut self) -> io::Result<i8> {
+    pub(crate) fn get_i8(&mut self) -> io::Result<i8> {
         self.r.read_i8()
     }
 
     #[inline]
-    fn get_i16(&mut self) -> io::Result<i16> {
+    pub(crate) fn get_i16(&mut self) -> io::Result<i16> {
         self.r.read_i16::<BigEndian>()
     }
 
     #[inline]
-    fn get_i32(&mut self) -> io::Result<i32> {
+    pub(crate) fn get_i32(&mut self) -> io::Result<i32> {
         self.r.read_i32::<BigEndian>()
     }
 
     #[inline]
-    fn get_i64(&mut self) -> io::Result<i64> {
+    pub(crate) fn get_i64(&mut self) -> io::Result<i64> {
         self.r.read_i64::<BigEndian>()
     }
 
     #[inline]
-    fn get_u8(&mut self) -> io::Result<u8> {
+    pub(crate) fn get_u8(&mut self) -> io::Result<u8> {
         self.r.read_u8()
     }
 
     #[inline]
-    fn get_u16(&mut self) -> io::Result<u16> {
+    pub(crate) fn get_u16(&mut self) -> io::Result<u16> {
         self.r.read_u16::<BigEndian>()
     }
 
     #[inline]
-    fn get_u32(&mut self) -> io::Result<u32> {
+    pub(crate) fn get_u32(&mut self) -> io::Result<u32> {
         self.r.read_u32::<BigEndian>()
     }
 
     #[inline]
-    fn get_u64(&mut self) -> io::Result<u64> {
+    pub(crate) fn get_u64(&mut self) -> io::Result<u64> {
         self.r.read_u64::<BigEndian>()
     }
 
     #[inline]
-    fn get_f32(&mut self) -> io::Result<f32> {
+    pub(crate) fn get_f32(&mut self) -> io::Result<f32> {
         self.r.read_f32::<BigEndian>()
     }
 
     #[inline]
-    fn get_f64(&mut self) -> io::Result<f64> {
+    pub(crate) fn get_f64(&mut self) -> io::Result<f64> {
         self.r.read_f64::<BigEndian>()
     }
 
@@ -154,7 +144,7 @@ where
         }))
     }
 
-    fn get_string(&mut self) -> io::Result<AtomString> {
+    pub(crate) fn get_string(&mut self) -> io::Result<AtomString> {
         match self.peek()? {
             TC_REFERENCE => {
                 self.advance(1)?;
@@ -304,37 +294,9 @@ where
     }
 }
 
-impl<W> Reader<bool> for ObjectReader<W>
-where
-    W: io::Read,
-{
-    fn read(&mut self) -> io::Result<bool> {
-        let i = self.get_u8()?;
-        Ok(i == 1)
-    }
-}
-
-impl<W, T> Reader<T> for ObjectReader<W>
-where
-    T: JavaObject + JavaDeserializable,
-    W: io::Read,
-{
-    fn read(&mut self) -> io::Result<T> {
-        let class = self.begin_object()?;
-        let t_class = T::class();
-        if class != t_class {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
-        }
-
-        let _h = self.alloc_handle();
-
-        T::read_object(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::proto::reader::{JavaDeserializable, ObjectReader, Reader};
+    use crate::proto::{JavaDeserializable, JavaFieldsDeserializable, ObjectReader, Reader};
     use crate::{
         Class, Extends, Field, JavaObject, JavaSerializable, JavaWriteable, JavaWriteableExt as _,
         ObjectWriter,
@@ -377,8 +339,10 @@ mod tests {
         }
     }
 
-    impl JavaDeserializable for Animal {
-        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    impl JavaFieldsDeserializable for Animal {
+        type Fields = (bool, bool, bool);
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
         where
             R: io::Read,
         {
@@ -386,10 +350,21 @@ mod tests {
             let run: bool = r.read()?;
             let swim: bool = r.read()?;
 
+            Ok((fly, run, swim))
+        }
+    }
+
+    impl JavaDeserializable for Animal {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let (fly, run, swim) = Self::read_fields(r)?;
             Ok(Self { fly, run, swim })
         }
     }
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
     struct Cat {
         id: i32,
         name: String,
@@ -459,6 +434,145 @@ mod tests {
         let class = ObjectReader::new(raw.as_slice())?.begin_object()?;
         info!("class: {:?}", class);
         assert_eq!(Cat::class(), class);
+
+        Ok(())
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Person {
+        id: i32,
+        name: String,
+        gender: u8,
+    }
+
+    impl JavaObject for Person {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.Person", 1)
+                    .field(Field::builder("id").int())
+                    .field(Field::builder("name").string())
+                    .field(Field::builder("gender").byte())
+                    .build()
+            });
+
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for Person {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+            self.id.write_to(w)?;
+            self.name.write_to(w)?;
+            self.gender.write_to(w)?;
+            Ok(())
+        }
+    }
+
+    impl JavaFieldsDeserializable for Person {
+        type Fields = (i32, String, u8);
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+        where
+            R: io::Read,
+        {
+            let id = r.get_i32()?;
+            let name = r.get_string()?.to_string();
+            let gender = r.get_u8()?;
+
+            Ok((id, name, gender))
+        }
+    }
+
+    impl JavaDeserializable for Person {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let (id, name, gender) = Self::read_fields(r)?;
+            Ok(Self { id, name, gender })
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Dog {
+        id: i32,
+        name: String,
+        master: Option<Person>,
+    }
+
+    impl JavaObject for Dog {
+        fn class() -> Class {
+            static CLASS: Lazy<Class> = Lazy::new(|| {
+                Class::builder("com.example.Dog", 1)
+                    .field(Field::builder("id").int())
+                    .field(Field::builder("name").string())
+                    .field(Field::builder("master").object(Person::class().signature()))
+                    .build()
+            });
+            Clone::clone(&CLASS)
+        }
+    }
+
+    impl JavaSerializable for Dog {
+        fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+            self.id.write_to(w)?;
+            self.name.write_to(w)?;
+            match &self.master {
+                None => ().write_to(w)?,
+                Some(master) => master.write_to(w)?,
+            }
+            Ok(())
+        }
+    }
+
+    impl JavaFieldsDeserializable for Dog {
+        type Fields = (i32, String, Option<Person>);
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+        where
+            R: io::Read,
+        {
+            let id = r.read()?;
+            let name = r.read()?;
+            let master: Person = r.read()?;
+            Ok((id, name, Some(master)))
+        }
+    }
+
+    impl JavaDeserializable for Dog {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let (id, name, master) = Self::read_fields(r)?;
+
+            Ok(Self { id, name, master })
+        }
+    }
+
+    #[test]
+    fn test_read_association() -> io::Result<()> {
+        init();
+
+        let master = Person {
+            id: 7,
+            name: "Tom".to_string(),
+            gender: 1,
+        };
+
+        let dog = Dog {
+            id: 123,
+            name: "Doge".into(),
+            master: Some(master),
+        };
+
+        let raw = dog.to_bytes()?;
+
+        let mut r = ObjectReader::new(raw.as_slice())?;
+
+        let dog2: Dog = r.read()?;
+
+        assert_eq!(dog, dog2);
 
         Ok(())
     }

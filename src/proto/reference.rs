@@ -1,4 +1,4 @@
-use super::{JavaObject, JavaSerializable, JavaWriteable, Object, ObjectWriter};
+use super::{JavaObject, JavaSerializable, JavaWriteable, ObjectView, ObjectWriter};
 use crate::Class;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::any::Any;
@@ -109,7 +109,9 @@ where
         // 2. write automatically
         let key = self.key();
         let class = T::class();
-        let obj = Object::<T, ()>::builder(class, borrowed).key(key).build();
+        let obj = ObjectView::<T, ()>::builder(class, borrowed)
+            .key(key)
+            .build();
 
         obj.write_to(w)?;
 

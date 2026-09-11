@@ -8,54 +8,54 @@ impl JavaSerializable for () {
     }
 }
 
-pub struct Object<'a, T, P> {
+pub(crate) struct ObjectView<'a, T, P> {
     this: (Class, &'a T, Option<usize>),
     parent: Option<(Class, &'a P)>,
 }
 
-pub struct ObjectBuilder<'a, T, P> {
-    inner: Object<'a, T, P>,
+pub(crate) struct ObjectViewBuilder<'a, T, P> {
+    inner: ObjectView<'a, T, P>,
 }
 
-impl<'a, T, P> ObjectBuilder<'a, T, P> {
-    pub fn key(mut self, key: usize) -> Self {
+impl<'a, T, P> ObjectViewBuilder<'a, T, P> {
+    pub(crate) fn key(mut self, key: usize) -> Self {
         self.inner.this.2.replace(key);
         self
     }
 
-    pub fn extends(mut self, class: Class, parent: &'a P) -> Self {
+    pub(crate) fn extends(mut self, class: Class, parent: &'a P) -> Self {
         self.inner.parent = Some((class, parent));
         self
     }
 
-    pub fn build(self) -> Object<'a, T, P> {
+    pub(crate) fn build(self) -> ObjectView<'a, T, P> {
         let Self { inner } = self;
         inner
     }
 }
 
-impl<'a, I, P> Object<'a, I, P> {
-    pub fn builder(class: Class, instance: &'a I) -> ObjectBuilder<'a, I, P> {
-        ObjectBuilder {
-            inner: Object {
+impl<'a, I, P> ObjectView<'a, I, P> {
+    pub(crate) fn builder(class: Class, instance: &'a I) -> ObjectViewBuilder<'a, I, P> {
+        ObjectViewBuilder {
+            inner: ObjectView {
                 this: (class, instance, None),
                 parent: None,
             },
         }
     }
 
-    pub fn this(&self) -> (&Class, &'a I, Option<usize>) {
+    pub(crate) fn this(&self) -> (&Class, &'a I, Option<usize>) {
         (&self.this.0, self.this.1, self.this.2)
     }
 
-    pub fn extends(&self) -> Option<(&Class, &'a P)> {
+    pub(crate) fn extends(&self) -> Option<(&Class, &'a P)> {
         match &self.parent {
             None => None,
             Some((class, instance)) => Some((class, instance)),
         }
     }
 
-    pub fn write_to<W>(&self, w: &mut ObjectWriter<W>) -> io::Result<()>
+    pub(crate) fn write_to<W>(&self, w: &mut ObjectWriter<W>) -> io::Result<()>
     where
         W: io::Write,
         P: JavaSerializable,
@@ -147,7 +147,7 @@ mod tests {
 
         let a = PojoA { id: 0xff };
 
-        let obj = Object::<PojoA, PojoB>::builder(class_a, &a)
+        let obj = ObjectView::<PojoA, PojoB>::builder(class_a, &a)
             .extends(class_b, &b)
             .build();
 
