@@ -4,14 +4,23 @@ use smallvec::SmallVec;
 /// Compute class signature, eg: `java.lang.String` => `Ljava/lang/String;`
 pub fn compute_signature(classname: &str) -> AtomString {
     let mut v = SmallVec::<[u8; 128]>::with_capacity(classname.len() + 2);
-    v.push(b'L');
-    for next in classname.bytes() {
-        match next {
-            b'.' => v.push(b'/'),
-            other => v.push(other),
+    if classname.starts_with('[') {
+        for next in classname.bytes() {
+            match next {
+                b'.' => v.push(b'/'),
+                other => v.push(other),
+            }
         }
+    } else {
+        v.push(b'L');
+        for next in classname.bytes() {
+            match next {
+                b'.' => v.push(b'/'),
+                other => v.push(other),
+            }
+        }
+        v.push(b';');
     }
-    v.push(b';');
 
     let sig = unsafe { std::str::from_utf8_unchecked(&v) };
     AtomString::from(sig)

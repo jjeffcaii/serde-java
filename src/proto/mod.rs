@@ -72,7 +72,8 @@ pub trait JavaObject: Sized {
 
 pub use class::{Class, ClassBuilder, ClassFlags, Field, FieldBuilder, FieldKind};
 pub use deserializable::{
-    JavaDeserializable, JavaFieldsDeserializable, JavaReadable, JavaReadableExt, Reader,
+    ArrayReader, JavaDeserializable, JavaFieldsDeserializable, JavaReadable, JavaReadableExt,
+    Reader,
 };
 pub use extends::{Extends, ExtendsLayout};
 pub(crate) use object::ObjectView;

@@ -179,11 +179,22 @@ where
         }
     }
 
-    pub fn begin_object(&mut self) -> io::Result<Class> {
+    pub(crate) fn begin_object(&mut self) -> io::Result<Class> {
         match self.peek()? {
             TC_OBJECT => {
                 self.advance(1)?;
                 self.read_class()
+            }
+            other => unimplemented!("unsupported tc 0x{:02x}", other),
+        }
+    }
+
+    pub(crate) fn begin_array(&mut self) -> io::Result<Class> {
+        match self.peek()? {
+            TC_ARRAY => {
+                self.advance(1)?;
+                let class = self.read_class()?;
+                Ok(class)
             }
             other => unimplemented!("unsupported tc 0x{:02x}", other),
         }
@@ -208,6 +219,8 @@ where
 
                 // class name
                 let class_name = self.get_string16()?;
+
+                debug!("read class_name {}", class_name.as_ref());
 
                 // SUID
                 let suid = self.get_i64()?;

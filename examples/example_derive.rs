@@ -7,6 +7,7 @@
 //! which is the ordering `example.rs` has to spell out by hand.
 
 use serde_java::*;
+use std::io;
 
 #[derive(Debug, JavaSerialize)]
 #[java(class = "com.example.User", serial_version_uid = 4956385333250593913)]
@@ -67,7 +68,43 @@ impl Address {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, JavaSerialize)]
+#[java(class = "com.example.Bang", serial_version_uid = 1)]
+struct Bang {
+    id: i64,
+    names: Vec<String>,
+}
+
+impl JavaFieldsDeserializable for Bang {
+    type Fields = (i64, Vec<String>);
+
+    fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+    where
+        R: io::Read,
+    {
+        Ok((r.read()?, r.read_all()?))
+    }
+}
+
+impl JavaDeserializable for Bang {
+    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        let (id, names) = Self::read_fields(r)?;
+        Ok(Self { id, names })
+    }
+}
+
 fn main() -> Result<()> {
+    let bang = Bang {
+        id: 1,
+        names: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    };
+    let raw = bang.to_bytes()?;
+    let parsed = Bang::from_bytes(&raw)?;
+    assert_eq!(parsed, bang);
+
     let user = User {
         id: 123,
         name: "Jack".to_string(),
@@ -81,6 +118,8 @@ fn main() -> Result<()> {
     };
 
     println!("{:?}: {}", user, hex::encode(&user.to_bytes()?));
+
+    // TODO: implement deserialize with derive
 
     Ok(())
 }
