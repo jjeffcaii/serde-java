@@ -67,27 +67,6 @@ check "Vec<char>" \
 struct A { x: Vec<char> }
 '
 
-check "u32 has no java equivalent" \
-    'has no Java equivalent' '
-#[derive(JavaSerialize)]
-#[java(class = "com.example.A", serial_version_uid = 1)]
-struct A { x: u32 }
-'
-
-check "Vec<String>" \
-    'are not supported' '
-#[derive(JavaSerialize)]
-#[java(class = "com.example.A", serial_version_uid = 1)]
-struct A { x: Vec<String> }
-'
-
-check "Vec<i8>" \
-    'use `u8` instead' '
-#[derive(JavaSerialize)]
-#[java(class = "com.example.A", serial_version_uid = 1)]
-struct A { x: Vec<i8> }
-'
-
 check "Vec<Vec<u8>>" \
     'are not supported' '
 #[derive(JavaSerialize)]
@@ -170,6 +149,34 @@ check "suid out of range" \
 #[derive(JavaSerialize)]
 #[java(class = "com.example.A", serial_version_uid = 99999999999999999999)]
 struct A { x: i32 }
+'
+
+check "deserialize borrowed" \
+    'requires owned field types' '
+#[derive(JavaDeserialize)]
+#[java(class = "A", serial_version_uid = 1)]
+struct A { value: &str }
+'
+
+check "deserialize nullable primitive" \
+    'Java primitives cannot be null' '
+#[derive(JavaDeserialize)]
+#[java(class = "A", serial_version_uid = 1)]
+struct A { value: Option<i32> }
+'
+
+check "deserialize layout" \
+    'does not support `with`' '
+#[derive(JavaDeserialize)]
+#[java(class = "A", serial_version_uid = 1)]
+struct A { #[java(signature = "Ljava/util/List;", with = "Adapter")] value: Vec<String> }
+'
+
+check "deserialize duplicate" \
+    'duplicate Java field name' '
+#[derive(JavaDeserialize)]
+#[java(class = "A", serial_version_uid = 1)]
+struct A { a: i32, #[java(rename = "a")] b: String }
 '
 
 if [ "$FAILED" -ne 0 ]; then

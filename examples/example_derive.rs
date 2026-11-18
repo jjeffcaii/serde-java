@@ -1,5 +1,6 @@
 //! The same `com.example.User` stream as `example.rs`, written with
-//! `#[derive(JavaSerialize)]` instead of hand-written impls.
+//! `#[derive(JavaSerialize, JavaDeserialize)]` instead of hand-written impls.
+//! Also demonstrates round trips for nested objects, arrays, and nullable fields.
 //!
 //! Both examples target `example.java` and produce byte-identical output. Note that the fields
 //! are declared here in the Java class's declaration order — the derive sorts them the way
@@ -7,9 +8,8 @@
 //! which is the ordering `example.rs` has to spell out by hand.
 
 use serde_java::*;
-use std::io;
 
-#[derive(Debug, JavaSerialize)]
+#[derive(Debug, PartialEq, JavaSerialize, JavaDeserialize)]
 #[java(class = "com.example.User", serial_version_uid = 4956385333250593913)]
 struct User {
     id: i64,
@@ -20,7 +20,7 @@ struct User {
     ext2: ExtInfo,
 }
 
-#[derive(Debug, JavaSerialize)]
+#[derive(Debug, PartialEq, JavaSerialize, JavaDeserialize)]
 #[java(class = "com.example.Address", serial_version_uid = -4433675896693646393)]
 struct Address {
     country: String,
@@ -28,7 +28,7 @@ struct Address {
     street: String,
 }
 
-#[derive(Debug, Clone, PartialEq, JavaSerialize)]
+#[derive(Debug, Clone, PartialEq, JavaSerialize, JavaDeserialize)]
 #[java(
     class = "com.example.ExtInfo",
     serial_version_uid = 8520976260072537200
@@ -68,32 +68,25 @@ impl Address {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, JavaSerialize)]
+#[derive(Debug, Clone, PartialEq, JavaSerialize, JavaDeserialize)]
 #[java(class = "com.example.Bang", serial_version_uid = 1)]
 struct Bang {
     id: i64,
     names: Vec<String>,
 }
 
-impl JavaFieldsDeserializable for Bang {
-    type Fields = (i64, Vec<String>);
-
-    fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
-    where
-        R: io::Read,
-    {
-        Ok((r.read()?, r.read_all()?))
-    }
-}
-
-impl JavaDeserializable for Bang {
-    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
-    where
-        R: io::Read,
-    {
-        let (id, names) = Self::read_fields(r)?;
-        Ok(Self { id, names })
-    }
+// `rename` determines the Java field name and wire order. `skip` fields are
+// omitted from the stream and initialized with Default during deserialization.
+#[derive(Debug, PartialEq, JavaSerialize, JavaDeserialize)]
+#[java(class = "com.example.Profile", serial_version_uid = 1)]
+struct Profile {
+    #[java(rename = "displayName")]
+    display_name: String,
+    nickname: Option<String>,
+    address: Option<Address>,
+    scores: Vec<i32>,
+    #[java(skip)]
+    local_cache: String,
 }
 
 fn main() -> Result<()> {
@@ -117,9 +110,30 @@ fn main() -> Result<()> {
         ext2: ExtInfo::new(888, "k888", "v888"),
     };
 
-    println!("{:?}: {}", user, hex::encode(&user.to_bytes()?));
+    // Nested objects and object arrays are deserialized recursively.
+    let raw = user.to_bytes()?;
+    println!("{:?}: {}", user, hex::encode(&raw));
+    let parsed = User::from_bytes(&raw)?;
+    assert_eq!(parsed, user);
 
-    // TODO: implement deserialize with derive
+    let mut profile = Profile {
+        display_name: "Jack".to_string(),
+        nickname: Some("JJ".to_string()),
+        address: Some(Address::new("China", "Shanghai", "Dongfang Rd")),
+        scores: vec![90, 85, 100],
+        local_cache: "only stored locally".to_string(),
+    };
+    let raw = profile.to_bytes()?;
+    let parsed = Profile::from_bytes(&raw)?;
+    assert!(parsed.local_cache.is_empty());
+    profile.local_cache.clear();
+    assert_eq!(parsed, profile);
+
+    // Nullable strings and objects also accept Java null.
+    profile.nickname = None;
+    profile.address = None;
+    let parsed = Profile::from_bytes(&profile.to_bytes()?)?;
+    assert_eq!(parsed, profile);
 
     Ok(())
 }

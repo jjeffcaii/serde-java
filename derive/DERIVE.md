@@ -88,3 +88,37 @@ impl JavaSerializable for User {
 
 
 ```
+
+## Deserialization
+
+Derive `JavaDeserialize` alongside `JavaSerialize` to read owned structures:
+
+```rust
+use serde_java::{JavaSerialize, JavaDeserialize, JavaReadableExt};
+
+#[derive(JavaSerialize, JavaDeserialize)]
+#[java(class = "com.example.Person", serial_version_uid = 1)]
+struct Person {
+    id: i32,
+    name: String,
+    nickname: Option<String>,
+    #[java(skip)]
+    cache: String,
+}
+
+// let person = Person::from_bytes(&bytes)?;
+```
+
+`JavaDeserialize` implements `JavaFieldsDeserializable` and
+`JavaDeserializable`. It requires `JavaObject`, provided by `JavaSerialize` or a
+manual implementation, and does not generate a conflicting class descriptor.
+Fields are read in Java protocol order, using renamed Java field names.
+Skipped fields consume no data and require `Default`.
+
+Supported fields include owned primitives, `String`, nested objects, their
+supported `Vec<T>` arrays, and `Option<T>` for nullable strings, objects and
+arrays. Borrowed fields, generic structures, nested options, nullable primitives,
+`with`/Layout adapters, inheritance, custom `readObject`, and general object
+references/cycles are unsupported. Class descriptors must match exactly; schema
+evolution and polymorphic fields are not supported. Unsupported object tokens
+return `InvalidData`.

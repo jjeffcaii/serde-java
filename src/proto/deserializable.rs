@@ -141,28 +141,50 @@ where
     }
 }
 
-impl<R> ArrayReader<u8> for ObjectReader<R>
-where
-    R: io::Read,
-{
-    fn read_all(&mut self) -> io::Result<Vec<u8>> {
-        let class = self.begin_array()?;
-        let t_class = Class::class_of_byte_array();
-        if t_class != class {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+macro_rules! impl_array_reader {
+    ($ty:ty, $class:ident) => {
+        impl<R: io::Read> ArrayReader<$ty> for ObjectReader<R> {
+            fn read_all(&mut self) -> io::Result<Vec<$ty>> {
+                if self.begin_array()? != Class::$class() {
+                    return Err(io::ErrorKind::InvalidData.into());
+                }
+                self.alloc_handle();
+                let size = self.get_i32()?;
+                if size < 0 {
+                    return Err(io::ErrorKind::InvalidData.into());
+                }
+                let mut items = Vec::new();
+                for _ in 0..size {
+                    items.push(Reader::<$ty>::read(self)?);
+                }
+                Ok(items)
+            }
         }
+    };
+}
+impl_array_reader!(bool, class_of_boolean_array);
+impl_array_reader!(u8, class_of_byte_array);
+impl_array_reader!(i8, class_of_byte_array);
+impl_array_reader!(u16, class_of_short_array);
+impl_array_reader!(i16, class_of_short_array);
+impl_array_reader!(u32, class_of_int_array);
+impl_array_reader!(i32, class_of_int_array);
+impl_array_reader!(u64, class_of_long_array);
+impl_array_reader!(i64, class_of_long_array);
+impl_array_reader!(usize, class_of_long_array);
+impl_array_reader!(isize, class_of_long_array);
+impl_array_reader!(f32, class_of_float_array);
+impl_array_reader!(f64, class_of_double_array);
+impl_array_reader!(String, class_of_string_array);
 
-        let _h = self.alloc_handle();
-
-        let size = self.get_u32()?;
-
-        let mut items = Vec::<u8>::with_capacity(size as usize);
-        for _ in 0..size {
-            let next = self.get_u8()?;
-            items.push(next);
-        }
-
-        Ok(items)
+impl<R: io::Read> Reader<usize> for ObjectReader<R> {
+    fn read(&mut self) -> io::Result<usize> {
+        usize::try_from(self.get_u64()?).map_err(|_| io::ErrorKind::InvalidData.into())
+    }
+}
+impl<R: io::Read> Reader<isize> for ObjectReader<R> {
+    fn read(&mut self) -> io::Result<isize> {
+        isize::try_from(self.get_i64()?).map_err(|_| io::ErrorKind::InvalidData.into())
     }
 }
 
@@ -180,33 +202,14 @@ where
 
         let _h = self.alloc_handle();
 
-        let size = self.get_u32()?;
-
-        let mut items = Vec::<T>::with_capacity(size as usize);
+        let size = self.get_i32()?;
+        if size < 0 {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        let mut items = Vec::<T>::new();
         for _ in 0..size {
             let next = T::read_from(self)?;
             items.push(next);
-        }
-
-        Ok(items)
-    }
-}
-
-impl<R> ArrayReader<String> for ObjectReader<R>
-where
-    R: io::Read,
-{
-    fn read_all(&mut self) -> io::Result<Vec<String>> {
-        let class = self.begin_array()?;
-
-        let _h = self.alloc_handle();
-
-        let size = self.get_u32()?;
-
-        let mut items = Vec::<String>::with_capacity(size as usize);
-        for _ in 0..size {
-            let item = self.get_string()?;
-            items.push(item.to_string());
         }
 
         Ok(items)

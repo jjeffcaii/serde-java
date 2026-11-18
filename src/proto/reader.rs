@@ -179,13 +179,26 @@ where
         }
     }
 
+    /// Consumes a null marker, leaving non-null values untouched.
+    pub fn read_null(&mut self) -> io::Result<bool> {
+        if self.peek()? == TC_NULL {
+            self.advance(1)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     pub(crate) fn begin_object(&mut self) -> io::Result<Class> {
         match self.peek()? {
             TC_OBJECT => {
                 self.advance(1)?;
                 self.read_class()
             }
-            other => unimplemented!("unsupported tc 0x{:02x}", other),
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported type code 0x{other:02x}"),
+            )),
         }
     }
 
@@ -196,7 +209,10 @@ where
                 let class = self.read_class()?;
                 Ok(class)
             }
-            other => unimplemented!("unsupported tc 0x{:02x}", other),
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported type code 0x{other:02x}"),
+            )),
         }
     }
 
@@ -247,6 +263,10 @@ where
                             let name = self.get_string16()?;
                             (FieldKind::Primitive(TypeCode::Char), name)
                         }
+                        b'S' => {
+                            let name = self.get_string16()?;
+                            (FieldKind::Primitive(TypeCode::Short), name)
+                        }
                         b'I' => {
                             let name = self.get_string16()?;
                             (FieldKind::Primitive(TypeCode::Int), name)
@@ -275,7 +295,12 @@ where
                             let sig = self.get_string()?;
                             (FieldKind::Array(sig), name)
                         }
-                        other => unimplemented!("unknown type code {:?}", other),
+                        other => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("unknown field type code 0x{other:02x}"),
+                            ));
+                        }
                     };
 
                     fields.push(next);
