@@ -217,6 +217,7 @@ impl JavaDeserializable for User {
 }
 
 fn main() -> anyhow::Result<()> {
+    let _x = minus(1, 10);
     pretty_env_logger::try_init().ok();
     let origin = User {
         id: 123,
@@ -244,4 +245,8 @@ fn main() -> anyhow::Result<()> {
     assert_eq!(origin, parsed);
 
     Ok(())
+}
+
+fn minus(x: u8, y: u8) -> u8 {
+    x - y
 }

@@ -14,6 +14,9 @@ mod proto;
 mod suid;
 pub mod util;
 
+#[cfg(test)]
+pub(crate) mod testkit;
+
 pub use error::Error;
 pub use layout::Layout;
 pub use proto::*;

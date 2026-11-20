@@ -88,13 +88,14 @@ mod tests {
 
     use anyhow::Result;
     use once_cell::sync::Lazy;
+    use serde::Serialize;
     use std::io;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
     }
 
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Serialize)]
     struct Demo {
         i: i32,
         message: String,
@@ -142,6 +143,7 @@ mod tests {
         }
     }
 
+    #[derive(Serialize)]
     struct Address {
         city: String,
     }
@@ -187,6 +189,7 @@ mod tests {
         }
     }
 
+    #[derive(Serialize)]
     struct Order {
         id: i32,
         address: Address,
@@ -240,19 +243,22 @@ mod tests {
     fn test_string() -> Result<()> {
         init();
 
-        fn check(input: &str, expect: &str) -> Result<()> {
-            let mut b: Vec<u8> = vec![];
-            let mut w = ObjectWriter::new(&mut b)?;
+        fn check(input: &str) -> Result<()> {
+            let expect = {
+                let json = serde_json::to_string(input)?;
+                crate::testkit::serialize("java.lang.String", &[], &json)?
+            };
 
-            w.write(input)?;
+            let mut actual: Vec<u8> = vec![];
 
-            let actual = hex::encode(&b);
+            {
+                let mut w = ObjectWriter::new(&mut actual)?;
+                w.write(input)?;
+            }
 
-            info!("{}: {}", input, actual);
+            assert_eq!(&expect, &actual);
 
-            assert_eq!(expect, &actual);
-
-            let mut r = ObjectReader::new(&b[..])?;
+            let mut r = ObjectReader::new(&actual[..])?;
             let output: String = r.read()?;
 
             assert_eq!(input, output);
@@ -261,16 +267,13 @@ mod tests {
         }
 
         // simple
-        check("Hello World!", "aced000574000c48656c6c6f20576f726c6421")?;
+        check("Hello World!")?;
 
         // with CJK
-        check("Hello 世界!", "aced000574000d48656c6c6f20e4b896e7958c21")?;
+        check("Hello 世界!")?;
 
         // with emoji
-        check(
-            "I♥️みかみゆあ!",
-            "aced000574001749e299a5efb88fe381bfe3818be381bfe38286e3818221",
-        )?;
+        check("I♥️みかみゆあ!")?;
 
         Ok(())
     }
@@ -284,12 +287,13 @@ mod tests {
             message: "helloWorld".to_string(),
         };
 
-        let raw = origin.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&origin)?;
+            crate::testkit::serialize(Demo::class().name(), &["testdata/Demo.java"], &json)?
+        };
 
-        assert_eq!(
-            "aced000573720010636f6d2e6578616d706c652e44656d6f477d87c81fbf509e020002490001694c00076d6573736167657400124c6a6176612f6c616e672f537472696e673b78700000002a74000a68656c6c6f576f726c64",
-            hex::encode(&raw)
-        );
+        let raw = origin.to_bytes()?;
+        assert_eq!(&expect, &raw);
 
         let parsed = Demo::from_bytes(&raw)?;
 
@@ -299,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_nested() -> io::Result<()> {
+    fn test_serialize_nested() -> Result<()> {
         init();
 
         let order = Order {
@@ -309,16 +313,22 @@ mod tests {
             },
         };
 
-        let raw = order.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&order)?;
+            crate::testkit::serialize(
+                Order::class().name(),
+                &["testdata/Address.java", "testdata/Order.java"],
+                &json,
+            )?
+        };
 
-        assert_eq!(
-            "aced000573720011636f6d2e6578616d706c652e4f72646572267b25a101681cb402000249000269644c0007616464726573737400154c636f6d2f6578616d706c652f416464726573733b78700000000773720013636f6d2e6578616d706c652e41646472657373c2786b43385d1bc70200014c0004636974797400124c6a6176612f6c616e672f537472696e673b78707400024e59",
-            hex::encode(&raw)
-        );
+        let actual = order.to_bytes()?;
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
 
+    #[derive(Serialize)]
     struct CustomPojo1 {
         username: String,
         password: String, // transient
@@ -329,7 +339,7 @@ mod tests {
     impl JavaObject for CustomPojo1 {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                Class::builder("com.example.CustomPojo1", -3231298442776514728)
                     .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
                     .field(Field::builder("username").string())
                     .build()
@@ -349,8 +359,10 @@ mod tests {
 
             self.admin.write_to(w)?;
             self.enabled.write_to(w)?;
+
             let enc_password = format!("ENCRYPT_{}", self.password);
             enc_password.write_to(w)?;
+
             Ok(())
         }
     }
@@ -366,16 +378,22 @@ mod tests {
             enabled: false,
         };
 
-        let raw = input.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            crate::testkit::serialize(
+                CustomPojo1::class().name(),
+                &["testdata/CustomPojo1.java"],
+                &json,
+            )?
+        };
 
-        assert_eq!(
-            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d6577020100740015454e43525950545f66616b655f70617373776f726478",
-            hex::encode(&raw)
-        );
+        let actual = input.to_bytes()?;
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
 
+    #[derive(Serialize)]
     struct CustomPojo2 {
         username: String,
         password: String, // transient
@@ -386,7 +404,7 @@ mod tests {
     impl JavaObject for CustomPojo2 {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                Class::builder("com.example.CustomPojo2", -3231298442776514729)
                     .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
                     .field(Field::builder("username").string())
                     .build()
@@ -423,16 +441,22 @@ mod tests {
             enabled: false,
         };
 
-        let raw = input.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            crate::testkit::serialize(
+                CustomPojo2::class().name(),
+                &["testdata/CustomPojo2.java"],
+                &json,
+            )?
+        };
 
-        assert_eq!(
-            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65770101740015454e43525950545f66616b655f70617373776f726477010078",
-            hex::encode(&raw)
-        );
+        let actual = input.to_bytes()?;
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
 
+    #[derive(Serialize)]
     struct CustomPojo3 {
         username: String,
         password: String, // transient
@@ -443,7 +467,7 @@ mod tests {
     impl JavaObject for CustomPojo3 {
         fn class() -> Class {
             static CLASS: Lazy<Class> = Lazy::new(|| {
-                Class::builder("com.example.CustomPojo", -3231298442776514728)
+                Class::builder("com.example.CustomPojo3", -3231298442776514730)
                     .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
                     .field(Field::builder("username").string())
                     .build()
@@ -481,16 +505,22 @@ mod tests {
             enabled: false,
         };
 
-        let raw = input.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            crate::testkit::serialize(
+                CustomPojo3::class().name(),
+                &["testdata/CustomPojo3.java"],
+                &json,
+            )?
+        };
 
-        assert_eq!(
-            "aced000573720016636f6d2e6578616d706c652e437573746f6d506f6a6fd3281f2fbb086f580300014c0008757365726e616d657400124c6a6176612f6c616e672f537472696e673b787074000d66616b655f757365726e616d65740015454e43525950545f66616b655f70617373776f72647702010078",
-            hex::encode(&raw)
-        );
+        let actual = input.to_bytes()?;
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
 
+    #[derive(Serialize)]
     struct CharDemo {
         ch: char,
     }
@@ -516,26 +546,26 @@ mod tests {
     fn test_char_demo() -> Result<()> {
         init();
 
+        let real_java_ser = |c: &CharDemo| {
+            let json = serde_json::to_string(c)?;
+            crate::testkit::serialize(CharDemo::class().name(), &["testdata/CharDemo.java"], &json)
+        };
+
         // normal char 'a'
         {
             let o = CharDemo { ch: 'a' };
-            let raw = o.to_bytes()?;
-            assert_eq!(
-                "aced000573720014636f6d2e6578616d706c652e4368617244656d6f91912a2291817ebc020001430002636878700061",
-                hex::encode(&raw)
-            );
+            let expect = real_java_ser(&o)?;
+            let actual = o.to_bytes()?;
+            assert_eq!(&expect, &actual);
         }
 
         // CJK char, still a single UTF-16 code unit: same classdesc, only the trailing 2-byte
         // value (last 4 hex chars) differs from the 'a' case above.
         {
             let o = CharDemo { ch: '世' };
-            let raw = o.to_bytes()?;
-            assert_eq!(
-                "aced000573720014636f6d2e6578616d706c652e4368617244656d6f91912a2291817ebc020001430002636878700061"
-                    .replace("0061", "4e16"),
-                hex::encode(&raw)
-            );
+            let expect = real_java_ser(&o)?;
+            let actual = o.to_bytes()?;
+            assert_eq!(&expect, &actual);
         }
 
         // Emoji is outside BMP, will return an error

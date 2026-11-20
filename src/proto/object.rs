@@ -101,6 +101,7 @@ impl<'a, I, P> ObjectView<'a, I, P> {
 mod tests {
     use super::*;
     use crate::{Field, Writer};
+    use serde_json::json;
     use std::io;
 
     struct PojoA {
@@ -129,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize() -> io::Result<()> {
+    fn test_serialize() -> anyhow::Result<()> {
         init();
 
         let class_b = Class::builder("com.example.PojoB", 311662489269302022)
@@ -147,24 +148,30 @@ mod tests {
 
         let a = PojoA { id: 0xff };
 
-        let obj = ObjectView::<PojoA, PojoB>::builder(class_a, &a)
-            .extends(class_b, &b)
+        let obj = ObjectView::<PojoA, PojoB>::builder(Clone::clone(&class_a), &a)
+            .extends(Clone::clone(&class_b), &b)
             .build();
 
-        let mut raw: Vec<u8> = vec![];
+        let expect = {
+            let value = json!({
+                "id": &a.id,
+                "name": &b.name,
+            });
 
+            crate::testkit::serialize(
+                class_a.name(),
+                &["testdata/PojoA.java", "testdata/PojoB.java"],
+                &value.to_string(),
+            )?
+        };
+
+        let mut actual: Vec<u8> = vec![];
         {
-            let mut jw = ObjectWriter::new(&mut raw)?;
-
+            let mut jw = ObjectWriter::new(&mut actual)?;
             obj.write_to(&mut jw)?;
-
-            info!("encode result: {}", hex::encode(&raw));
         }
 
-        assert_eq!(
-            "aced000573720011636f6d2e6578616d706c652e506f6a6f41c31c011822e7434d020001490002696478720011636f6d2e6578616d706c652e506f6a6f4204533f61fab5f3060200014c00046e616d657400124c6a6176612f6c616e672f537472696e673b787074000a68656c6c6f776f726c64000000ff",
-            hex::encode(&raw),
-        );
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
