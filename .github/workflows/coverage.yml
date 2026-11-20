@@ -23,6 +23,8 @@ jobs:
           java-version: '17'
       - name: Set up JBang
         uses: jbangdev/setup-jbang@main
+      - name: Set up just
+        uses: extractions/setup-just@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -31,6 +33,8 @@ jobs:
         run: |
           curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf -
           sudo mv ./grcov /usr/local/bin/
+      - name: Warm up JBang
+        run: just ser-profile
       - name: Run tests
         run: |
           cargo test --workspace --verbose

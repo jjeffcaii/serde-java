@@ -23,8 +23,12 @@ jobs:
         java-version: '17'
     - name: Set up JBang
       uses: jbangdev/setup-jbang@main
+    - name: Set up just
+      uses: extractions/setup-just@v4
     - name: Build
       run: cargo build --verbose
+    - name: Warm up JBang
+      run: just ser-profile
     - name: Run tests
       run: |
         cargo test --workspace --verbose
