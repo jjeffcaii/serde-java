@@ -20,9 +20,9 @@ impl<T> From<Vec<T>> for LinkedListOwned<T> {
     }
 }
 
-impl<T> Into<Vec<T>> for LinkedListOwned<T> {
-    fn into(self) -> Vec<T> {
-        self.0
+impl<T> From<LinkedListOwned<T>> for Vec<T> {
+    fn from(val: LinkedListOwned<T>) -> Self {
+        val.0
     }
 }
 
@@ -144,7 +144,7 @@ impl<'a, T> Layout<'a> for LinkedList<'a, T> {
     type Output = LinkedList<'a, T>;
 
     fn layout(input: &'a Self::Input) -> Self::Output {
-        LinkedList(&input)
+        LinkedList(input)
     }
 }
 
@@ -190,9 +190,9 @@ impl<T> From<Vec<T>> for ArrayListOwned<T> {
     }
 }
 
-impl<T> Into<Vec<T>> for ArrayListOwned<T> {
-    fn into(self) -> Vec<T> {
-        self.0
+impl<T> From<ArrayListOwned<T>> for Vec<T> {
+    fn from(val: ArrayListOwned<T>) -> Self {
+        val.0
     }
 }
 
@@ -337,7 +337,7 @@ mod tests {
     fn test_empty_list() -> io::Result<()> {
         init();
 
-        let l = EmptyList::default();
+        let l = EmptyList;
         let raw = l.to_bytes()?;
 
         assert_eq!(
@@ -352,7 +352,7 @@ mod tests {
     fn test_linked_list() -> io::Result<()> {
         init();
 
-        let origin = vec!["foo".to_string(), "bar".to_string(), "qux".to_string()];
+        let origin = ["foo".to_string(), "bar".to_string(), "qux".to_string()];
         let l = LinkedList::from(&origin[..]);
 
         info!("debug: {:?}", l);
@@ -388,7 +388,7 @@ mod tests {
             scores: vec![1.1, 2.2, 3.3],
         };
 
-        info!("{:?}", &v);
+        info!("{:?}", v);
 
         let raw = v.to_bytes()?;
 
@@ -404,7 +404,7 @@ mod tests {
     fn test_array_list() -> io::Result<()> {
         init();
 
-        let origin = vec![
+        let origin = [
             "foo".to_string(),
             "bar".to_string(),
             "baz".to_string(),
@@ -451,7 +451,7 @@ mod tests {
                 scores: None,
             };
 
-            info!("{:?}", &l);
+            info!("{:?}", l);
 
             let raw = l.to_bytes()?;
             assert_eq!(
@@ -468,7 +468,7 @@ mod tests {
                 scores: Some(vec![1, 2, 3]),
             };
 
-            info!("{:?}", &l);
+            info!("{:?}", l);
 
             let raw = l.to_bytes()?;
             assert_eq!(

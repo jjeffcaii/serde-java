@@ -18,9 +18,9 @@ impl fmt::Display for Character {
     }
 }
 
-impl Into<char> for Character {
-    fn into(self) -> char {
-        self.0
+impl From<Character> for char {
+    fn from(val: Character) -> Self {
+        val.0
     }
 }
 
@@ -96,7 +96,7 @@ mod test {
 
         {
             let d = CharacterDemo { ch: Some('a') };
-            info!("{:?}", &d);
+            info!("{:?}", d);
             let raw = d.to_bytes()?;
             assert_eq!(
                 "aced000573720019636f6d2e6578616d706c652e43686172616374657244656d6fec6247d6f2dc5e120200014c000263687400154c6a6176612f6c616e672f4368617261637465723b7870737200136a6176612e6c616e672e436861726163746572348b47d96b1a267802000143000576616c756578700061",
@@ -107,7 +107,7 @@ mod test {
         // check null
         {
             let d = CharacterDemo { ch: None };
-            info!("{:?}", &d);
+            info!("{:?}", d);
             let raw = d.to_bytes()?;
             assert_eq!(
                 "aced000573720019636f6d2e6578616d706c652e43686172616374657244656d6fec6247d6f2dc5e120200014c000263687400154c6a6176612f6c616e672f4368617261637465723b787070",

@@ -80,9 +80,9 @@ impl<'a> StackTraceElementBuilder<'a> {
     }
 }
 
-impl<'a> Into<StackTraceElement> for StackTraceElementBuilder<'a> {
-    fn into(self) -> StackTraceElement {
-        self.build()
+impl<'a> From<StackTraceElementBuilder<'a>> for StackTraceElement {
+    fn from(val: StackTraceElementBuilder<'a>) -> Self {
+        val.build()
     }
 }
 

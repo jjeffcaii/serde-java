@@ -1,3 +1,4 @@
+use super::flags::*;
 use super::{Class, FieldKind};
 use crate::astr::AtomString;
 use crate::util::to_modified_utf8;
@@ -5,31 +6,6 @@ use byteorder::{BigEndian, WriteBytesExt};
 use hashbrown::HashMap;
 use smallvec::SmallVec;
 use std::io;
-
-// Stream header
-const STREAM_MAGIC: u16 = 0xaced;
-const STREAM_VERSION: u16 = 0x0005;
-
-// TC_* type code
-const TC_NULL: u8 = 0x70;
-const TC_REFERENCE: u8 = 0x71;
-const TC_CLASSDESC: u8 = 0x72;
-const TC_OBJECT: u8 = 0x73;
-const TC_STRING: u8 = 0x74;
-const TC_ARRAY: u8 = 0x75;
-const TC_CLASS: u8 = 0x76;
-const TC_BLOCKDATA: u8 = 0x77;
-const TC_ENDBLOCKDATA: u8 = 0x78;
-const TC_RESET: u8 = 0x79;
-const TC_BLOCKDATALONG: u8 = 0x7a;
-const TC_EXCEPTION: u8 = 0x7b;
-const TC_LONGSTRING: u8 = 0x7c;
-const TC_PROXYCLASSDESC: u8 = 0x7d;
-const TC_ENUM: u8 = 0x7e;
-const TC_MAX: u8 = 0x7e;
-const TC_NULLREF: u8 = 0x70; // alias
-
-const BASE_WIRE_HANDLE: u32 = 0x7e0000;
 
 type BlockData = SmallVec<[u8; 32]>;
 

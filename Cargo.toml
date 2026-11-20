@@ -36,10 +36,12 @@ smallvec = { version = "1.15", features = ["write"] }
 sha1 = "0.11"
 parking_lot = "0.12"
 serde-java-derive = { version = "0.0.4", path = "derive", optional = true }
+serde = { version = "1.0.229", features = ["derive"] }
 
 [dev-dependencies]
 pretty_env_logger = "0.5"
 hex = "0.4"
+serde_json = "1"
 
 [features]
 default = ["derive"]

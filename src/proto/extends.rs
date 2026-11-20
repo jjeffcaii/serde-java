@@ -1,5 +1,6 @@
-use super::object::Object;
-use super::serializable::{JavaObject, JavaSerializable, JavaWriteable};
+use super::JavaObject;
+use super::object::ObjectView;
+use super::serializable::{JavaSerializable, JavaWriteable};
 use super::writer::ObjectWriter;
 use crate::ClassFlags;
 use std::fmt::{Debug, Formatter};
@@ -68,7 +69,7 @@ where
     P: JavaSerializable + JavaObject,
 {
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        let obj = Object::<T, P>::builder(T::class(), &self.this)
+        let obj = ObjectView::<T, P>::builder(T::class(), &self.this)
             .extends(P::class(), &self.parent)
             .build();
 
@@ -151,6 +152,7 @@ mod tests {
     use super::*;
     use crate::{Class, Field, JavaWriteableExt, Writer};
     use once_cell::sync::Lazy;
+    use serde_json::json;
 
     struct PojoA {
         id: i32,
@@ -204,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize() -> io::Result<()> {
+    fn test_serialize() -> anyhow::Result<()> {
         init();
 
         let a = PojoA { id: 0xff };
@@ -212,13 +214,24 @@ mod tests {
             name: "helloworld".to_string(),
         };
 
-        let c = a.extends(b);
-        let raw = c.to_bytes()?;
+        let expect = {
+            let value = json!({
+                "id": &a.id,
+                "name": &b.name,
+            });
 
-        assert_eq!(
-            "aced000573720011636f6d2e6578616d706c652e506f6a6f41c31c011822e7434d020001490002696478720011636f6d2e6578616d706c652e506f6a6f4204533f61fab5f3060200014c00046e616d657400124c6a6176612f6c616e672f537472696e673b787074000a68656c6c6f776f726c64000000ff",
-            hex::encode(&raw),
-        );
+            crate::testkit::serialize(
+                PojoA::class().name(),
+                &["testdata/PojoA.java", "testdata/PojoB.java"],
+                &value.to_string(),
+            )?
+        };
+
+        let c = a.extends(b);
+
+        let actual = c.to_bytes()?;
+
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }
@@ -292,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn test_c_extends_b_extends_a() -> io::Result<()> {
+    fn test_c_extends_b_extends_a() -> anyhow::Result<()> {
         init();
 
         let a = A {
@@ -305,14 +318,25 @@ mod tests {
             c: "fake-c".to_string(),
         };
 
+        let expect = {
+            let json = json!({
+                "a": &a.a,
+                "b": &b.b,
+                "c": &c.c,
+            })
+            .to_string();
+            crate::testkit::serialize(
+                C::class().name(),
+                &["testdata/A.java", "testdata/B.java", "testdata/C.java"],
+                &json,
+            )?
+        };
+
         let c_b_a = c.extends(b.extends(a));
 
-        let raw = c_b_a.to_bytes()?;
+        let actual = c_b_a.to_bytes()?;
 
-        assert_eq!(
-            "aced00057372000d636f6d2e6578616d706c652e4317cc028c3cdb62870200014c0001637400124c6a6176612f6c616e672f537472696e673b7872000d636f6d2e6578616d706c652e42697f8137523ed7550200014c00016271007e00017872000d636f6d2e6578616d706c652e41532cdab0df296f690200014c00016171007e0001787074000666616b652d6174000666616b652d6274000666616b652d63",
-            hex::encode(&raw)
-        );
+        assert_eq!(&expect, &actual);
 
         Ok(())
     }

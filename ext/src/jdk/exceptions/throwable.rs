@@ -158,7 +158,7 @@ mod tests {
         )
         .build();
 
-        info!("stack: {:?}", &st);
+        info!("stack: {:?}", st);
 
         let raw = st.to_bytes()?;
 

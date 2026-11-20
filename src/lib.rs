@@ -14,12 +14,15 @@ mod proto;
 mod suid;
 pub mod util;
 
+#[cfg(test)]
+pub(crate) mod testkit;
+
 pub use error::Error;
 pub use layout::Layout;
 pub use proto::*;
 
 #[cfg(feature = "derive")]
-pub use serde_java_derive::JavaSerialize;
+pub use serde_java_derive::{JavaDeserialize, JavaSerialize};
 
 /// Implementation details used by the generated code of `#[derive(JavaSerialize)]`.
 /// Not a stable API.

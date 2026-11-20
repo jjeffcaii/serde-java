@@ -18,9 +18,9 @@ impl fmt::Display for Boolean {
     }
 }
 
-impl Into<bool> for Boolean {
-    fn into(self) -> bool {
-        self.0
+impl From<Boolean> for bool {
+    fn from(val: Boolean) -> Self {
+        val.0
     }
 }
 
@@ -73,7 +73,7 @@ mod tests {
         {
             let b = Boolean::from(true);
 
-            info!("{}: {}", Boolean::class().name(), &b);
+            info!("{}: {}", Boolean::class().name(), b);
 
             let raw = b.to_bytes()?;
             assert_eq!(
@@ -86,7 +86,7 @@ mod tests {
         {
             let b = Boolean::from(false);
 
-            info!("{}: {}", Boolean::class().name(), &b);
+            info!("{}: {}", Boolean::class().name(), b);
 
             let raw = b.to_bytes()?;
             assert_eq!(
@@ -116,7 +116,7 @@ mod tests {
         {
             let v = BooleanDemo { enabled: None };
 
-            info!("{:?}", &v);
+            info!("{:?}", v);
 
             let raw = v.to_bytes()?;
 
@@ -132,7 +132,7 @@ mod tests {
                 enabled: Some(true),
             };
 
-            info!("{:?}", &v);
+            info!("{:?}", v);
 
             let raw = v.to_bytes()?;
 

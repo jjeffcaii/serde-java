@@ -8,7 +8,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 bitflags! {
-    #[derive(Default,Clone,Copy)]
+    #[derive(Default,Clone,Copy,PartialEq,Eq,Hash,Debug)]
     pub struct ClassFlags: u8 {
         const WRITE_METHOD = 0x01;
         const SERIALIZABLE = 0x01<<1;
@@ -18,7 +18,7 @@ bitflags! {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct FieldName(AtomString);
 
 impl<A> From<A> for FieldName
@@ -103,7 +103,7 @@ impl fmt::Display for FieldKind {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Field(FieldName, FieldKind);
 
 impl Field {
@@ -145,6 +145,12 @@ pub struct FieldBuilder<'a> {
 }
 
 impl<'a> FieldBuilder<'a> {
+    #[inline]
+    pub(crate) fn build(self, kind: FieldKind) -> Field {
+        let Self { name } = self;
+        Field(FieldName::from(name), kind)
+    }
+
     pub fn boolean(self) -> Field {
         let Self { name } = self;
         Field::with_primitive(name, TypeCode::Boolean)
@@ -275,6 +281,7 @@ pub struct ClassBuilder<'a> {
     super_class: Option<Class>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct RawClass {
     pub(crate) name: AtomString,
     pub(crate) signature: AtomString,
@@ -284,7 +291,7 @@ struct RawClass {
     pub(crate) super_class: Option<Class>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct Class {
     raw: Arc<RawClass>,
 }

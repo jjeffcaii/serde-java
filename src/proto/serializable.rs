@@ -1,69 +1,8 @@
+use super::JavaObject;
 use super::class::Class;
-use super::object::Object;
+use super::object::ObjectView;
 use super::writer::{ArrayWriter, ObjectWriter, Writer};
 use std::io;
-
-/// Declares which Java class a Rust type maps to — the Rust-side equivalent of that class's
-/// `Class`/`ObjectStreamClass` descriptor.
-///
-/// This is the minimum information needed for a Rust type to be written to the serialization
-/// stream as a Java object: a [`Class`] recording the fully-qualified Java class name, its
-/// `serialVersionUID`, class flags ([`crate::ClassFlags`]), and its field list sorted the way the
-/// JVM sorts it (all primitive fields first, then all object/array fields, each group ordered
-/// alphabetically by name — *not* the Rust struct's declaration order). Writing the object header
-/// (`TC_OBJECT` + classdesc) reads straight from this descriptor.
-///
-/// Usually not hand-written: `#[derive(JavaSerialize)]` combined with
-/// `#[java(class = "...", serial_version_uid = ...)]` generates this impl automatically, with
-/// field sorting resolved at macro-expansion time. A hand-written impl is only needed for cases
-/// the derive doesn't cover yet (the `WRITE_METHOD` flag, superclass chains, custom array
-/// classes, ...), and should cache the built `Class` in a `once_cell::sync::Lazy` static so
-/// `class()` doesn't rebuild it on every call.
-///
-/// # Hand-written example
-///
-/// ```
-/// use once_cell::sync::Lazy;
-/// use serde_java::*;
-/// use std::io;
-///
-/// struct Point {
-///     x: i32,
-///     y: i32,
-/// }
-///
-/// impl JavaObject for Point {
-///     fn class() -> Class {
-///         // Cache with Lazy: built once on first call, cheap Arc clone afterwards.
-///         static CLASS: Lazy<Class> = Lazy::new(|| {
-///             Class::builder("com.example.Point", 1)
-///                 .field(Field::builder("x").int())
-///                 .field(Field::builder("y").int())
-///                 .build()
-///         });
-///         Clone::clone(&CLASS)
-///     }
-/// }
-///
-/// impl JavaSerializable for Point {
-///     fn write_fields(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-///         self.x.write_to(w)?;
-///         self.y.write_to(w)?;
-///         Ok(())
-///     }
-/// }
-///
-/// let bytes = Point { x: 1, y: 2 }.to_bytes().unwrap();
-/// assert!(bytes.starts_with(&[0xAC, 0xED, 0x00, 0x05])); // stream magic
-/// ```
-pub trait JavaObject {
-    /// Returns the Java `Class` descriptor for this type (name, serialVersionUID, field list, etc).
-    ///
-    /// May be called multiple times (once per object of this type written to a stream), so
-    /// implementations should cache the built value in a `once_cell::sync::Lazy` and
-    /// `Clone::clone` it out (`Class` is internally an `Arc`, so cloning is cheap).
-    fn class() -> Class;
-}
 
 /// Defines how a type writes its own field values into the serialization stream — the
 /// counterpart of Java's `Serializable` interface plus an optional custom
@@ -251,208 +190,39 @@ impl JavaWriteable for str {
     }
 }
 
-impl JavaWriteable for bool {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
+macro_rules! impl_writeable_scalar {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl JavaWriteable for $ty {
+                #[inline]
+                fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+                    w.write(*self)
+                }
+            }
+        )*
+    };
 }
 
-impl JavaWriteable for char {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
+impl_writeable_scalar!(
+    bool, char, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize, f32, f64
+);
+
+macro_rules! impl_writeable_slice {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl JavaWriteable for [$ty] {
+                #[inline]
+                fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
+                    w.write_all(self)
+                }
+            }
+        )*
+    };
 }
 
-impl JavaWriteable for i8 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for u8 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for i16 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for u16 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for i32 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for u32 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for i64 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for u64 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for isize {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for usize {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for f32 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for f64 {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write(*self)
-    }
-}
-
-impl JavaWriteable for [bool] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [char] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [i8] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [u8] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [i16] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [u16] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [i32] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [u32] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [i64] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [u64] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [isize] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [usize] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [f32] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [f64] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
-
-impl JavaWriteable for [String] {
-    #[inline]
-    fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
-        w.write_all(self)
-    }
-}
+impl_writeable_slice!(
+    bool, char, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize, f32, f64, String
+);
 
 impl<T> JavaWriteable for T
 where
@@ -462,7 +232,7 @@ where
     fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
         let class = Self::class();
         let obj = {
-            let mut bu = Object::<T, ()>::builder(class, self);
+            let mut bu = ObjectView::<T, ()>::builder(class, self);
             if let Some(ptr) = self.virtual_ptr() {
                 bu = bu.key(ptr);
             }
