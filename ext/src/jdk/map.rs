@@ -315,6 +315,8 @@ fn table_size_for(capacity: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit::serialize as tkser;
+    use serde::Serialize;
     use serde_java::{JavaSerialize, JavaWriteableExt};
 
     fn init() {
@@ -328,18 +330,16 @@ mod tests {
     }
 
     #[test]
-    fn test_hashmap() -> io::Result<()> {
+    fn test_hashmap() -> anyhow::Result<()> {
         init();
 
         // empty
         {
             let empty = StdHashMap::<String, String>::new();
-            let raw = HashMap::layout(&empty).to_bytes()?;
 
-            assert_eq!(
-                "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f400000000000007708000000100000000078",
-                hex::encode(&raw)
-            );
+            let expect = { tkser("java.util.HashMap", &[], "{}")? };
+            let actual = HashMap::layout(&empty).to_bytes()?;
+            assert_eq!(expect, actual);
         }
 
         {
@@ -351,18 +351,20 @@ mod tests {
 
             let m = HashMap::builder(&origin).build();
 
-            let raw = m.to_bytes()?;
+            let expect = {
+                let json = serde_json::to_string(&origin)?;
+                tkser("java.util.HashMap", &[], &json)?
+            };
 
-            assert_eq!(
-                "aced0005737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c6478",
-                hex::encode(&raw)
-            );
+            let actual = m.to_bytes()?;
+
+            assert_eq!(expect, actual);
         }
 
         Ok(())
     }
 
-    #[derive(Debug, JavaSerialize)]
+    #[derive(Debug, Serialize, JavaSerialize)]
     #[java(class="com.example.HashMapDemo",serial_version_uid=-5707132217429457092)]
     struct HashMapDemo {
         #[java(signature = "Ljava/util/Map;", with = "crate::java::util::HashMap")]
@@ -372,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hashmap_in_fields() -> io::Result<()> {
+    fn test_hashmap_in_fields() -> anyhow::Result<()> {
         init();
 
         let exts = {
@@ -395,12 +397,18 @@ mod tests {
 
         info!("input: {:?}", input);
 
-        let raw = input.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            tkser(
+                HashMapDemo::class().name(),
+                &["testdata/HashMapDemo.java"],
+                &json,
+            )?
+        };
 
-        assert_eq!(
-            "aced000573720017636f6d2e6578616d706c652e486173684d617044656d6fb0cc317c65ee073c0200024c00046578747374000f4c6a6176612f7574696c2f4d61703b4c000673636f72657371007e00017870737200116a6176612e7574696c2e486173684d61700507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c6478703f4000000000000c7708000000100000000174000568656c6c6f740005776f726c64787371007e00033f4000000000000c77080000001000000001737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787000000001737200106a6176612e6c616e672e446f75626c6580b3c24a296bfb0402000144000576616c75657871007e000940091eb851eb851f78",
-            hex::encode(&raw),
-        );
+        let actual = input.to_bytes()?;
+
+        assert_eq!(expect, actual);
 
         Ok(())
     }

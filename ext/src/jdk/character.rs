@@ -59,28 +59,25 @@ impl<'a> Layout<'a> for Character {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::testkit;
+    use serde::Serialize;
     use serde_java::{JavaSerialize, JavaWriteableExt};
-    use std::io;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
     }
 
     #[test]
-    fn test_character() -> io::Result<()> {
+    fn test_character() -> anyhow::Result<()> {
         init();
-        //aced0005737200136a6176612e6c616e672e436861726163746572348b47d96b1a267802000143000576616c756578700061
-
-        let raw = Character::from('a').to_bytes()?;
-        assert_eq!(
-            "aced0005737200136a6176612e6c616e672e436861726163746572348b47d96b1a267802000143000576616c756578700061",
-            hex::encode(&raw)
-        );
+        let expect = testkit::serialize(Character::class().name(), &[], r#""a""#)?;
+        let actual = Character::from('a').to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
 
-    #[derive(Debug, JavaSerialize)]
+    #[derive(Debug, Serialize, JavaSerialize)]
     #[java(class="com.example.CharacterDemo",serial_version_uid=-1413488344517812718)]
     struct CharacterDemo {
         #[java(
@@ -91,28 +88,27 @@ mod test {
     }
 
     #[test]
-    fn test_character_in_fields() -> io::Result<()> {
+    fn test_character_in_fields() -> anyhow::Result<()> {
         init();
 
-        {
-            let d = CharacterDemo { ch: Some('a') };
-            info!("{:?}", d);
-            let raw = d.to_bytes()?;
-            assert_eq!(
-                "aced000573720019636f6d2e6578616d706c652e43686172616374657244656d6fec6247d6f2dc5e120200014c000263687400154c6a6176612f6c616e672f4368617261637465723b7870737200136a6176612e6c616e672e436861726163746572348b47d96b1a267802000143000576616c756578700061",
-                hex::encode(&raw)
-            );
-        }
+        for next in [
+            // ch='a'
+            CharacterDemo { ch: Some('a') },
+            // ch=null
+            CharacterDemo { ch: None },
+        ] {
+            info!("{:?}", next);
 
-        // check null
-        {
-            let d = CharacterDemo { ch: None };
-            info!("{:?}", d);
-            let raw = d.to_bytes()?;
-            assert_eq!(
-                "aced000573720019636f6d2e6578616d706c652e43686172616374657244656d6fec6247d6f2dc5e120200014c000263687400154c6a6176612f6c616e672f4368617261637465723b787070",
-                hex::encode(&raw)
-            );
+            let expect = {
+                let json = serde_json::to_string(&next)?;
+                testkit::serialize(
+                    CharacterDemo::class().name(),
+                    &["testdata/CharacterDemo.java"],
+                    &json,
+                )?
+            };
+            let actual = next.to_bytes()?;
+            assert_eq!(expect, actual);
         }
 
         Ok(())

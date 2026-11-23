@@ -85,7 +85,9 @@ impl<'a> Layout<'a> for Date {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit;
     use serde_java::{JavaSerialize, JavaWriteableExt};
+    use serde_json::json;
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -124,19 +126,22 @@ mod tests {
     }
 
     #[test]
-    fn test_date_in_fields() -> io::Result<()> {
+    fn test_date_in_fields() -> anyhow::Result<()> {
         init();
 
+        let input = 1787649130999;
         let v = DateDemo {
-            created_at: Some(1787649130999),
+            created_at: Some(input),
         };
 
-        let raw = v.to_bytes()?;
+        let expect = {
+            let json = json!({"createdAt": &input}).to_string();
+            testkit::serialize(DateDemo::class().name(), &["testdata/DateDemo.java"], &json)?
+        };
 
-        assert_eq!(
-            "aced000573720014636f6d2e6578616d706c652e4461746544656d6f2adcb24f94d533d20200014c00096372656174656441747400104c6a6176612f7574696c2f446174653b78707372000e6a6176612e7574696c2e44617465686a81014b59741903000078707708000001a0383101f778",
-            hex::encode(&raw)
-        );
+        let actual = v.to_bytes()?;
+
+        assert_eq!(expect, actual);
 
         Ok(())
     }

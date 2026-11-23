@@ -59,6 +59,8 @@ impl<'a> Layout<'a> for Boolean {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit;
+    use serde::Serialize;
     use serde_java::{JavaSerialize, JavaWriteableExt};
 
     fn init() {
@@ -66,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn test_java_lang_boolean() -> io::Result<()> {
+    fn test_java_lang_boolean() -> anyhow::Result<()> {
         init();
 
         // true
@@ -75,30 +77,26 @@ mod tests {
 
             info!("{}: {}", Boolean::class().name(), b);
 
-            let raw = b.to_bytes()?;
-            assert_eq!(
-                "aced0005737200116a6176612e6c616e672e426f6f6c65616ecd207280d59cfaee0200015a000576616c7565787001",
-                hex::encode(&raw)
-            );
+            let expect = testkit::serialize("java.lang.Boolean", &[], "true")?;
+
+            let actual = b.to_bytes()?;
+            assert_eq!(expect, actual);
         }
 
         // false
         {
             let b = Boolean::from(false);
-
             info!("{}: {}", Boolean::class().name(), b);
 
-            let raw = b.to_bytes()?;
-            assert_eq!(
-                "aced0005737200116a6176612e6c616e672e426f6f6c65616ecd207280d59cfaee0200015a000576616c7565787000",
-                hex::encode(&raw)
-            );
+            let expect = testkit::serialize("java.lang.Boolean", &[], "false")?;
+            let actual = b.to_bytes()?;
+            assert_eq!(expect, actual);
         }
 
         Ok(())
     }
 
-    #[derive(Debug, JavaSerialize)]
+    #[derive(Debug, Serialize, JavaSerialize)]
     #[java(
         class = "com.example.BooleanDemo",
         serial_version_uid = 3043629198327648182
@@ -109,37 +107,34 @@ mod tests {
     }
 
     #[test]
-    fn test_java_lang_boolean_field() -> io::Result<()> {
+    fn test_java_lang_boolean_field() -> anyhow::Result<()> {
         init();
 
-        // check enabled=null
-        {
-            let v = BooleanDemo { enabled: None };
-
-            info!("{:?}", v);
-
-            let raw = v.to_bytes()?;
-
-            assert_eq!(
-                "aced000573720017636f6d2e6578616d706c652e426f6f6c65616e44656d6f2a3d24a14a538fb60200014c0007656e61626c65647400134c6a6176612f6c616e672f426f6f6c65616e3b787070",
-                hex::encode(&raw)
-            );
-        }
-
-        // check enabled=true
-        {
-            let v = BooleanDemo {
+        for next in [
+            // check enabled=null
+            BooleanDemo { enabled: None },
+            // check enabled=true
+            BooleanDemo {
                 enabled: Some(true),
+            },
+            // check enabled=false
+            BooleanDemo {
+                enabled: Some(false),
+            },
+        ] {
+            info!("{:?}", next);
+
+            let expect = {
+                let json = serde_json::to_string(&next)?;
+                testkit::serialize(
+                    BooleanDemo::class().name(),
+                    &["testdata/BooleanDemo.java"],
+                    &json,
+                )?
             };
 
-            info!("{:?}", v);
-
-            let raw = v.to_bytes()?;
-
-            assert_eq!(
-                "aced000573720017636f6d2e6578616d706c652e426f6f6c65616e44656d6f2a3d24a14a538fb60200014c0007656e61626c65647400134c6a6176612f6c616e672f426f6f6c65616e3b7870737200116a6176612e6c616e672e426f6f6c65616ecd207280d59cfaee0200015a000576616c7565787001",
-                hex::encode(&raw)
-            );
+            let actual = next.to_bytes()?;
+            assert_eq!(expect, actual);
         }
 
         Ok(())

@@ -173,6 +173,8 @@ define_number!(
 mod tests {
     use super::*;
 
+    use crate::testkit;
+
     use serde_java::JavaWriteableExt;
 
     fn init() {
@@ -180,73 +182,83 @@ mod tests {
     }
 
     #[test]
-    fn test_java_lang_byte() -> io::Result<()> {
+    fn test_java_lang_byte() -> anyhow::Result<()> {
         init();
 
-        let b = Byte::from(0x01);
+        let origin = 0x01i8;
+        let b = Byte::from(origin);
 
         info!("{}: {}", Byte::class().name(), b);
 
-        let raw = b.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&origin)?;
+            testkit::serialize(Byte::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced00057372000e6a6176612e6c616e672e427974659c4e6084ee50f51c02000142000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787001",
-            hex::encode(&raw)
-        );
+        let actual = b.to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
 
     #[test]
-    fn test_java_lang_short() -> io::Result<()> {
+    fn test_java_lang_short() -> anyhow::Result<()> {
         init();
 
-        let s = Short::from(0x0102);
+        let input = 0x0102i16;
+
+        let s = Short::from(input);
 
         info!("{}: {}", Short::class().name(), s);
 
-        let raw = s.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            testkit::serialize(Short::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced00057372000f6a6176612e6c616e672e53686f7274684d37133460da5202000153000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b02000078700102",
-            hex::encode(&raw)
-        );
+        let actual = s.to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
 
     #[test]
-    fn test_java_lang_integer() -> io::Result<()> {
+    fn test_java_lang_integer() -> anyhow::Result<()> {
         init();
 
-        let i = Integer::from(0x01020304);
+        let input = 0x01020304i32;
+
+        let i = Integer::from(input);
 
         info!("{}: {}", Integer::class().name(), i);
 
-        let b = i.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            testkit::serialize(Integer::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced0005737200116a6176612e6c616e672e496e746567657212e2a0a4f781873802000149000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b020000787001020304",
-            hex::encode(&b)
-        );
+        let actual = i.to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
 
     #[test]
-    fn test_java_lang_long() -> io::Result<()> {
+    fn test_java_lang_long() -> anyhow::Result<()> {
         init();
 
-        let l = Long::from(0x0102030405060708);
+        let input = 0x0102030405060708i64;
+        let l = Long::from(input);
 
         info!("{}: {}", Long::class().name(), l);
 
-        let b = l.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            testkit::serialize(Long::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced00057372000e6a6176612e6c616e672e4c6f6e673b8be490cc8f23df0200014a000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b02000078700102030405060708",
-            hex::encode(&b)
-        );
+        let actual = l.to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
@@ -254,37 +266,42 @@ mod tests {
     #[test]
     // 3.14 is the value the JVM fixture below was captured with, not an attempt at PI.
     #[allow(clippy::approx_constant)]
-    fn test_java_lang_float() -> io::Result<()> {
+    fn test_java_lang_float() -> anyhow::Result<()> {
         init();
 
-        let f = Float::from(3.14);
+        let input = 3.14f32;
+        let f = Float::from(input);
 
         info!("{}: {}", Float::class().name(), f);
 
-        let b = f.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            testkit::serialize(Float::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced00057372000f6a6176612e6c616e672e466c6f6174daedc9a2db3cf0ec02000146000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b02000078704048f5c3",
-            hex::encode(&b)
-        );
+        let actual = f.to_bytes()?;
+        assert_eq!(expect, actual);
 
         Ok(())
     }
 
     #[test]
-    fn test_java_lang_double() -> io::Result<()> {
+    fn test_java_lang_double() -> anyhow::Result<()> {
         init();
 
-        let f = Double::from(std::f64::consts::PI);
+        let input = std::f64::consts::PI;
+        let f = Double::from(input);
 
         info!("{}: {}", Double::class().name(), f);
 
-        let b = f.to_bytes()?;
+        let expect = {
+            let json = serde_json::to_string(&input)?;
+            testkit::serialize(Double::class().name(), &[], &json)?
+        };
 
-        assert_eq!(
-            "aced0005737200106a6176612e6c616e672e446f75626c6580b3c24a296bfb0402000144000576616c7565787200106a6176612e6c616e672e4e756d62657286ac951d0b94e08b0200007870400921fb54442d18",
-            hex::encode(&b)
-        );
+        let actual = f.to_bytes()?;
+
+        assert_eq!(expect, actual);
 
         Ok(())
     }

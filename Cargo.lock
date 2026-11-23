@@ -376,10 +376,13 @@ dependencies = [
 name = "serde-java-ext"
 version = "0.0.4"
 dependencies = [
+ "anyhow",
  "hex",
  "log",
  "pretty_env_logger",
+ "serde",
  "serde-java",
+ "serde_json",
 ]
 
 [[package]]
