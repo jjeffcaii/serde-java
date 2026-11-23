@@ -181,40 +181,9 @@ mod tests {
     fn test_reference() -> Result<()> {
         init();
 
-        // ==== the origin Java codes ====
-        //
-        // package com.example;
-        //
-        // import java.io.IOException;
-        // import lombok.Data;
-        // import org.apache.commons.codec.binary.Hex;
-        // import org.apache.commons.lang3.SerializationUtils;
-        //
-        // @Data
-        // public class RefDemo implements java.io.Serializable {
-        //
-        //   private static final long serialVersionUID = 8952467648642045509L;
-        //
-        //   private long id;
-        //   private RefDemo link;
-        //   private String data;
-        //
-        //   public static void main(String[] args) throws IOException {
-        // 	   RefDemo root = new RefDemo();
-        // 	   root.setId(0x0102030405060708L);
-        // 	   root.setData("foobar");
-        // 	   root.setLink(root);
-        //
-        // 	   byte[] raw = SerializationUtils.serialize(root);
-        //
-        // 	   System.out.println(Hex.encodeHexString(raw));
-        //   }
-        //
-        // }
-
         let r = {
             let origin = RefDemo {
-                id: 0x0102030405060708,
+                id: 72623859790382856,
                 link: None,
                 data: "foobar".to_string(),
             };
@@ -227,12 +196,26 @@ mod tests {
         info!("reference: {:?}", r);
         info!("reference: {}", r);
 
+        // the self-referenced JSON in fastjson:
+        // ```java
+        //  RefDemo d = new RefDemo();
+        // 	d.setId(0x0102030405060708L);
+        // 	d.setData("foobar");
+        // 	d.setLink(d);
+        //  String result = JSON.toJSONString(d, Feature.ReferenceDetection)
+        // ```
+        let json = r#"{"id":72623859790382856,"data":"foobar","link":{"$ref":".."}}"#;
+
+        let actual =
+            crate::testkit::serialize(RefDemo::class().name(), &["testdata/RefDemo.java"], json)?;
+
+        let b = hex::encode(&actual);
+
+        info!("binary: {}", &b);
+
         let raw = r.to_bytes()?;
 
-        assert_eq!(
-            "aced000573720013636f6d2e6578616d706c652e52656644656d6f7c3d8de4ec7c56450200034a000269644c0004646174617400124c6a6176612f6c616e672f537472696e673b4c00046c696e6b7400154c636f6d2f6578616d706c652f52656644656d6f3b78700102030405060708740006666f6f62617271007e0003",
-            hex::encode(&raw)
-        );
+        assert_eq!(actual, raw);
 
         Ok(())
     }

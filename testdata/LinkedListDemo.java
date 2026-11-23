@@ -1,6 +1,5 @@
 package com.example;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
@@ -11,9 +10,7 @@ public class LinkedListDemo implements Serializable {
 
   private int id;
 
-  @JsonDeserialize(as = LinkedList.class)
   private List<String> names;
-  @JsonDeserialize(as = LinkedList.class)
   private List<Float> scores;
 
   public int getId() {
@@ -28,7 +25,7 @@ public class LinkedListDemo implements Serializable {
 	return names;
   }
 
-  public void setNames(List<String> names) {
+  public void setNames(LinkedList<String> names) {
 	this.names = names;
   }
 
@@ -37,6 +34,6 @@ public class LinkedListDemo implements Serializable {
   }
 
   public void setScores(List<Float> scores) {
-	this.scores = scores;
+	this.scores = scores == null ? null : new LinkedList<>(scores);
   }
 }

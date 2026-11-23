@@ -1,10 +1,9 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
 //JAVA 17+
-//DEPS com.fasterxml.jackson.core:jackson-databind:2.18.2
+//DEPS com.alibaba.fastjson2:fastjson2:2.0.66
 //DEPS info.picocli:picocli:4.7.6
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.fastjson2.JSON;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -86,9 +85,7 @@ public class Ser implements Callable<Integer> {
                 : jsonInput;
 
         // 3. Deserialize JSON into the target class instance
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        Object instance = mapper.readValue(rawJson, rootTargetClass);
+        Object instance = JSON.parseObject(rawJson, rootTargetClass);
 
         // 4. Serialize Java object and encode as Hex
         String hexOutput = serializeToHex((Serializable) instance);

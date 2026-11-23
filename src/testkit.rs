@@ -47,6 +47,20 @@ mod tests {
 
     #[test]
     #[ignore = "requires JBang and a JDK"]
+    fn test_serialize_self_reference() -> anyhow::Result<()> {
+        let actual = serialize("java.util.HashMap", &[], r#"{"self":{"$ref":"$"}}"#)?;
+        // Generated with ObjectOutputStream after inserting the map into itself.
+        let expected = hex::decode(concat!(
+            "aced0005737200116a6176612e7574696c2e486173684d6170",
+            "0507dac1c31660d103000246000a6c6f6164466163746f724900097468726573686f6c64",
+            "78703f4000000000000c7708000000100000000174000473656c6671007e000178",
+        ))?;
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "requires JBang and a JDK"]
     fn test_serialize_demo() -> anyhow::Result<()> {
         let actual = serialize(
             "com.example.Demo",

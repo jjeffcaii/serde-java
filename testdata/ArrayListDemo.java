@@ -1,6 +1,5 @@
 package com.example;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,9 +9,7 @@ public class ArrayListDemo implements Serializable {
   private static final long serialVersionUID = 3153513349080412905L;
 
   private int id;
-  @JsonDeserialize(as = ArrayList.class)
   private List<String> names;
-  @JsonDeserialize(as = ArrayList.class)
   private List<Integer> scores;
 
   public int getId() {
@@ -27,7 +24,7 @@ public class ArrayListDemo implements Serializable {
 	return names;
   }
 
-  public void setNames(List<String> names) {
+  public void setNames(ArrayList<String> names) {
 	this.names = names;
   }
 
@@ -35,7 +32,7 @@ public class ArrayListDemo implements Serializable {
 	return scores;
   }
 
-  public void setScores(List<Integer> scores) {
+  public void setScores(ArrayList<Integer> scores) {
 	this.scores = scores;
   }
 
