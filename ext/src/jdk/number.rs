@@ -1,7 +1,8 @@
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
-    Class, Extends, ExtendsLayout, Field, JavaObject, JavaSerializable, JavaWriteable, Layout,
-    ObjectWriter,
+    Class, DeserializeWith, Extends, ExtendsLayout, Field, JavaDeserializable,
+    JavaFieldsDeserializable, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectReader,
+    ObjectWriter, Reader,
 };
 use std::{fmt, io};
 
@@ -82,6 +83,15 @@ macro_rules! define_number {
                 let extends = $inner(*input).extends(Number::default());
                 Self(extends)
             }
+
+        }
+
+        impl DeserializeWith for $name {
+            type Output = $prim;
+
+            fn deserialize_with(&self) -> Self::Output {
+                self.0.this().0
+            }
         }
 
         #[derive(Copy, Clone, PartialEq $(, $extra)*)]
@@ -98,6 +108,30 @@ macro_rules! define_number {
                 self.0.write_to(w)
             }
         }
+
+        impl JavaFieldsDeserializable for $inner {
+            type Fields = $prim;
+
+            fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+            where
+                R: io::Read,
+            {
+                let i = r.read()?;
+                Ok(i)
+            }
+        }
+
+
+        impl JavaDeserializable for $inner {
+            fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+            where
+                R: io::Read,
+            {
+                let i = Self::read_fields(r)?;
+                Ok(Self(i))
+            }
+        }
+
     };
 }
 

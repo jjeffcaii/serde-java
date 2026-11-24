@@ -18,7 +18,7 @@ pub mod util;
 pub(crate) mod testkit;
 
 pub use error::Error;
-pub use layout::Layout;
+pub use layout::{DeserializeWith, Layout};
 pub use proto::*;
 
 #[cfg(feature = "derive")]

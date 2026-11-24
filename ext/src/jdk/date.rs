@@ -1,6 +1,7 @@
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
-    Class, ClassFlags, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
+    Class, ClassFlags, DeserializeWith, JavaDeserializable, JavaFieldsDeserializable, JavaObject,
+    JavaSerializable, JavaWriteable, Layout, ObjectReader, ObjectWriter, Reader,
 };
 use std::io;
 use std::ops::Add;
@@ -73,6 +74,27 @@ impl JavaSerializable for Date {
     }
 }
 
+// impl JavaFieldsDeserializable for Date {
+//     type Fields = u64;
+//
+//     fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+//     where
+//         R: io::Read,
+//     {
+//         Ok(r.read()?)
+//     }
+// }
+//
+// impl JavaDeserializable for Date {
+//     fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+//     where
+//         R: io::Read,
+//     {
+//         let unix_millis = Self::read_fields(r)?;
+//         Ok(Self(unix_millis))
+//     }
+// }
+
 impl<'a> Layout<'a> for Date {
     type Input = u64;
     type Output = Date;
@@ -82,11 +104,19 @@ impl<'a> Layout<'a> for Date {
     }
 }
 
+impl DeserializeWith for Date {
+    type Output = u64;
+
+    fn deserialize_with(&self) -> Self::Output {
+        self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testkit;
-    use serde_java::{JavaSerialize, JavaWriteableExt};
+    use serde_java::{JavaReadableExt, JavaSerialize, JavaWriteableExt};
     use serde_json::json;
 
     fn init() {
@@ -94,19 +124,20 @@ mod tests {
     }
 
     #[test]
-    fn test_date() -> io::Result<()> {
+    fn test_date() -> anyhow::Result<()> {
         init();
 
-        let value = Date::from(1787649130999); // 2026-08-25T17:12:10.999+0800
+        let unix_millis = 1787649130999;
 
-        info!("date: {:?}", value);
+        let origin = Date::from(unix_millis); // 2026-08-25T17:12:10.999+0800
 
-        let raw = value.to_bytes()?;
+        info!("date: {:?}", origin);
 
-        assert_eq!(
-            "aced00057372000e6a6176612e7574696c2e44617465686a81014b59741903000078707708000001a0383101f778",
-            hex::encode(&raw)
-        );
+        let actual = origin.to_bytes()?;
+
+        let expect = testkit::serialize(Date::class().name(), &[], &unix_millis.to_string())?;
+
+        assert_eq!(expect, actual);
 
         Ok(())
     }

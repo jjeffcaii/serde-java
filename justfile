@@ -1,5 +1,8 @@
 # https://just.systems
 
+@test:
+    cargo test --workspace
+
 @ser-user:
     jbang Ser.java \
       -c examples/java/Address.java \
