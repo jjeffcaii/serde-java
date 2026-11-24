@@ -42,6 +42,13 @@ macro_rules! define_number {
             }
         }
 
+        impl JavaDeserializable for $name {
+            fn read_object<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<Self> {
+                let value = $inner::read_object(r)?;
+                Ok(Self(value.extends(Number::default())))
+            }
+        }
+
         impl JavaWriteable for $name {
             fn write_to(&self, w: &mut ObjectWriter<&mut dyn io::Write>) -> io::Result<()> {
                 self.0.write_to(w)

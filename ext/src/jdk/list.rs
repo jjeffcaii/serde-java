@@ -1,7 +1,8 @@
-use super::misc::write_boxed;
+use super::misc::{read_boxed, write_boxed};
 use serde_java::__private::once_cell::sync::Lazy;
 use serde_java::{
-    Class, ClassFlags, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter,
+    Class, ClassFlags, Field, JavaDeserializable, JavaFieldsDeserializable, JavaObject,
+    JavaReadable, JavaSerializable, JavaWriteable, Layout, ObjectReader, ObjectWriter, Reader,
 };
 use std::{fmt, io};
 
@@ -78,6 +79,36 @@ where
         Ok(())
     }
 }
+
+impl<T> JavaFieldsDeserializable for LinkedListOwned<T> {
+    type Fields = ();
+
+    fn read_fields<R: io::Read>(_r: &mut ObjectReader<R>) -> io::Result<Self::Fields> {
+        Ok(())
+    }
+}
+
+impl<T> JavaDeserializable for LinkedListOwned<T>
+where
+    T: 'static + JavaReadable<Item = T>,
+{
+    fn read_object<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<Self> {
+        Self::default_read_object(r)?;
+
+        // LinkedList stores its size in the custom data block.
+        let length: i32 = r.read()?;
+        if length < 0 {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+
+        let mut items = Vec::new();
+        for _ in 0..length {
+            items.push(read_boxed(r)?);
+        }
+        Ok(Self(items))
+    }
+}
+
 pub struct LinkedList<'a, T>(pub &'a [T]);
 
 impl<'a, T> fmt::Debug for LinkedList<'a, T>
@@ -224,6 +255,40 @@ where
     }
 }
 
+impl<T> JavaFieldsDeserializable for ArrayListOwned<T> {
+    type Fields = i32;
+
+    fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+    where
+        R: io::Read,
+    {
+        r.read()
+    }
+}
+
+impl<T> JavaDeserializable for ArrayListOwned<T>
+where
+    T: 'static + JavaReadable<Item = T>,
+{
+    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        let length = Self::default_read_object(r)?;
+        // Java writes a legacy capacity value here and uses the default size field.
+        let _: i32 = r.read()?;
+        if length < 0 {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+
+        let mut items = Vec::new();
+        for _ in 0..length {
+            items.push(read_boxed(r)?);
+        }
+        Ok(Self(items))
+    }
+}
+
 pub struct ArrayList<'a, T>(pub &'a [T]);
 
 impl<'a, T> fmt::Debug for ArrayList<'a, T>
@@ -323,12 +388,21 @@ impl JavaSerializable for EmptyList {
     }
 }
 
+impl JavaDeserializable for EmptyList {
+    fn read_object<R>(_: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        Ok(EmptyList)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testkit;
     use serde::Serialize;
-    use serde_java::{JavaSerialize, JavaWriteableExt};
+    use serde_java::{JavaReadableExt, JavaSerialize, JavaWriteableExt};
     use std::io;
 
     fn init() {
@@ -336,16 +410,18 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_list() -> io::Result<()> {
+    fn test_empty_list() -> anyhow::Result<()> {
         init();
 
-        let l = EmptyList;
-        let raw = l.to_bytes()?;
+        let input = EmptyList;
 
+        let raw = input.to_bytes()?;
         assert_eq!(
             "aced00057372001f6a6176612e7574696c2e436f6c6c656374696f6e7324456d7074794c6973747ab817b43ca79ede0200007870",
             hex::encode(&raw)
         );
+
+        let _ = EmptyList::from_bytes(&raw)?;
 
         Ok(())
     }
@@ -369,6 +445,7 @@ mod tests {
         let actual = l.to_bytes()?;
 
         assert_eq!(expect, actual);
+        assert_eq!(LinkedListOwned::<String>::from_bytes(&expect)?.0, origin);
 
         Ok(())
     }
@@ -427,19 +504,20 @@ mod tests {
             "qux".to_string(),
             "gob".to_string(),
         ];
-        let l = ArrayList::from(&origin[..]);
+        let input = ArrayList::from(&origin[..]);
 
-        info!("debug: {:?}", l);
-        info!("display: {}", l);
+        info!("debug: {:?}", input);
+        info!("display: {}", input);
 
         let expect = {
             let json = serde_json::to_string(&origin)?;
             testkit::serialize(ArrayList::<()>::class().name(), &[], &json)?
         };
 
-        let actual = l.to_bytes()?;
+        let actual = input.to_bytes()?;
 
         assert_eq!(expect, actual);
+        assert_eq!(ArrayListOwned::<String>::from_bytes(&actual)?.0, origin);
 
         Ok(())
     }

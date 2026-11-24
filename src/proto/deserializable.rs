@@ -64,24 +64,24 @@ pub trait JavaDeserializable: Sized {
         R: io::Read;
 }
 
-/// Reads an object from an existing [`ObjectReader`].
+/// Reads a value from an existing [`ObjectReader`].
 ///
 /// Types implementing [`JavaObject`] and [`JavaDeserializable`] get this
 /// implementation automatically.
 pub trait JavaReadable {
-    /// The object produced by the read.
+    /// The value produced by the read.
     type Item;
 
-    /// Reads one object from an initialized stream. The blanket implementation
+    /// Reads one value from an initialized stream. The object implementation
     /// checks the class descriptor before invoking the class-data callback.
     fn read_from<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<Self::Item>;
 }
 
-/// Convenience entry point for reading a [`JavaReadable`] object directly
+/// Convenience entry point for reading a [`JavaReadable`] value directly
 /// from a byte slice containing a Java serialization stream.
 pub trait JavaReadableExt<T> {
     /// Creates a reader from bytes containing a Java stream header and reads
-    /// the first object.
+    /// the first value.
     fn from_bytes(bytes: &[u8]) -> io::Result<T>;
 }
 
@@ -92,6 +92,24 @@ impl<T: JavaDeserializable + JavaObject> JavaReadable for T {
         Reader::read(r)
     }
 }
+
+macro_rules! impl_java_readable {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl JavaReadable for $ty {
+                type Item = Self;
+
+                fn read_from<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<Self> {
+                    Reader::read(r)
+                }
+            }
+        )*
+    };
+}
+
+impl_java_readable!(
+    bool, char, i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, AtomString, String,
+);
 
 impl<T> JavaReadableExt<T> for T
 where
