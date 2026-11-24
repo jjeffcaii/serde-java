@@ -328,7 +328,15 @@ mod tests {
         Ok(())
     }
 
-    #[derive(Serialize)]
+    fn enc_password(input: &str) -> String {
+        format!("ENCRYPT_{}", input)
+    }
+
+    fn dec_password(input: &str) -> Option<&str> {
+        input.strip_prefix("ENCRYPT_")
+    }
+
+    #[derive(Debug, PartialEq, Eq, Serialize)]
     struct CustomPojo1 {
         username: String,
         password: String, // transient
@@ -360,15 +368,51 @@ mod tests {
             self.admin.write_to(w)?;
             self.enabled.write_to(w)?;
 
-            let enc_password = format!("ENCRYPT_{}", self.password);
+            let enc_password = enc_password(&self.password);
             enc_password.write_to(w)?;
 
             Ok(())
         }
     }
 
+    impl JavaFieldsDeserializable for CustomPojo1 {
+        type Fields = String;
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+        where
+            R: io::Read,
+        {
+            let username = r.read()?;
+            Ok(username)
+        }
+    }
+
+    impl JavaDeserializable for CustomPojo1 {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let username = Self::default_read_object(r)?;
+
+            let admin: bool = r.read()?;
+            let enabled: bool = r.read()?;
+
+            let password = {
+                let enc_password: String = r.read()?;
+                dec_password(&enc_password).unwrap_or_default().to_string()
+            };
+
+            Ok(Self {
+                username,
+                password,
+                admin,
+                enabled,
+            })
+        }
+    }
+
     #[test]
-    fn test_custom_pojo() -> Result<()> {
+    fn test_custom_pojo1() -> Result<()> {
         init();
 
         let input = CustomPojo1 {
@@ -390,10 +434,14 @@ mod tests {
         let actual = input.to_bytes()?;
         assert_eq!(&expect, &actual);
 
+        let output = CustomPojo1::from_bytes(&actual)?;
+
+        assert_eq!(input, output);
+
         Ok(())
     }
 
-    #[derive(Serialize)]
+    #[derive(Debug, PartialEq, Eq, Serialize)]
     struct CustomPojo2 {
         username: String,
         password: String, // transient
@@ -430,6 +478,43 @@ mod tests {
         }
     }
 
+    impl JavaFieldsDeserializable for CustomPojo2 {
+        type Fields = String;
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+        where
+            R: io::Read,
+        {
+            let username = r.read()?;
+            Ok(username)
+        }
+    }
+
+    impl JavaDeserializable for CustomPojo2 {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let username = Self::default_read_object(r)?;
+
+            let admin: bool = r.read()?;
+
+            let password = {
+                let enc_password: String = r.read()?;
+                dec_password(&enc_password).unwrap_or_default().to_string()
+            };
+
+            let enabled: bool = r.read()?;
+
+            Ok(Self {
+                username,
+                password,
+                admin,
+                enabled,
+            })
+        }
+    }
+
     #[test]
     fn test_custom_pojo2() -> Result<()> {
         init();
@@ -453,10 +538,14 @@ mod tests {
         let actual = input.to_bytes()?;
         assert_eq!(&expect, &actual);
 
+        let output = CustomPojo2::from_bytes(&actual)?;
+
+        assert_eq!(input, output);
+
         Ok(())
     }
 
-    #[derive(Serialize)]
+    #[derive(Debug, PartialEq, Eq, Serialize)]
     struct CustomPojo3 {
         username: String,
         password: String, // transient
@@ -494,6 +583,41 @@ mod tests {
         }
     }
 
+    impl JavaFieldsDeserializable for CustomPojo3 {
+        type Fields = String;
+
+        fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+        where
+            R: io::Read,
+        {
+            Ok(r.read()?)
+        }
+    }
+
+    impl JavaDeserializable for CustomPojo3 {
+        fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+        where
+            R: io::Read,
+        {
+            let username = Self::default_read_object(r)?;
+
+            let password = {
+                let enc_password: String = r.read()?;
+                dec_password(&enc_password).unwrap_or_default().to_string()
+            };
+
+            let admin: bool = r.read()?;
+            let enabled: bool = r.read()?;
+
+            Ok(Self {
+                username,
+                password,
+                admin,
+                enabled,
+            })
+        }
+    }
+
     #[test]
     fn test_custom_pojo3() -> Result<()> {
         init();
@@ -516,6 +640,9 @@ mod tests {
 
         let actual = input.to_bytes()?;
         assert_eq!(&expect, &actual);
+
+        let output = CustomPojo3::from_bytes(&actual)?;
+        assert_eq!(input, output);
 
         Ok(())
     }

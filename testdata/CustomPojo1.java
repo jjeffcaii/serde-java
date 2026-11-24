@@ -15,7 +15,10 @@ public class CustomPojo1 implements Serializable {
   private transient boolean enabled;
 
   private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-	in.defaultReadObject();
+  	in.defaultReadObject();
+  	this.password = ((String) in.readObject()).substring("ENCRYPT_".length());
+  	this.admin = in.readBoolean();
+  	this.enabled = in.readBoolean();
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {

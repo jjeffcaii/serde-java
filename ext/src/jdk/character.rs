@@ -1,5 +1,8 @@
 use serde_java::__private::once_cell::sync::Lazy;
-use serde_java::{Class, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter};
+use serde_java::{
+    Class, DeserializeWith, Field, JavaDeserializable, JavaFieldsDeserializable, JavaObject,
+    JavaSerializable, JavaWriteable, Layout, ObjectReader, ObjectWriter, Reader,
+};
 use std::{fmt, io};
 
 /// Reference of java.lang.Character
@@ -47,6 +50,26 @@ impl JavaSerializable for Character {
     }
 }
 
+impl JavaFieldsDeserializable for Character {
+    type Fields = char;
+
+    fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+    where
+        R: io::Read,
+    {
+        Ok(r.read()?)
+    }
+}
+
+impl JavaDeserializable for Character {
+    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        Ok(Self(Self::read_fields(r)?))
+    }
+}
+
 impl<'a> Layout<'a> for Character {
     type Input = char;
     type Output = Character;
@@ -56,12 +79,20 @@ impl<'a> Layout<'a> for Character {
     }
 }
 
+impl DeserializeWith for Character {
+    type Output = char;
+
+    fn deserialize_with(&self) -> Self::Output {
+        self.0
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::testkit;
     use serde::Serialize;
-    use serde_java::{JavaSerialize, JavaWriteableExt};
+    use serde_java::{JavaReadableExt, JavaSerialize, JavaWriteableExt};
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -73,6 +104,9 @@ mod test {
         let expect = testkit::serialize(Character::class().name(), &[], r#""a""#)?;
         let actual = Character::from('a').to_bytes()?;
         assert_eq!(expect, actual);
+
+        let ch = Character::from_bytes(&actual)?;
+        assert_eq!('a', ch.into());
 
         Ok(())
     }

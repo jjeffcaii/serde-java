@@ -18,3 +18,9 @@ pub trait Layout<'a> {
     /// Converts a borrowed `Input` into `Output`.
     fn layout(input: &'a Self::Input) -> Self::Output;
 }
+
+pub trait DeserializeWith {
+    type Output;
+
+    fn deserialize_with(&self) -> Self::Output;
+}

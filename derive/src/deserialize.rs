@@ -110,7 +110,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
         }
         impl ::serde_java::JavaDeserializable for #ident {
             fn read_object<R: ::std::io::Read>(r: &mut ::serde_java::ObjectReader<R>) -> ::std::io::Result<Self> {
-                let (#(#names,)*) = <Self as ::serde_java::JavaFieldsDeserializable>::read_fields(r)?;
+                let (#(#names,)*) = <Self as ::serde_java::JavaFieldsDeserializable>::default_read_object(r)?;
                 Ok(Self { #(#init,)* })
             }
         }

@@ -1,5 +1,9 @@
 use serde_java::__private::once_cell::sync::Lazy;
-use serde_java::{Class, Field, JavaObject, JavaSerializable, JavaWriteable, Layout, ObjectWriter};
+use serde_java::{
+    Class, DeserializeWith, Field, JavaDeserializable, JavaFieldsDeserializable, JavaObject,
+    JavaSerializable, JavaWriteable, Layout, ObjectReader, ObjectWriter, Reader,
+};
+use std::io::Read;
 use std::{fmt, io};
 
 /// Reference of java.lang.Boolean
@@ -47,6 +51,28 @@ impl JavaSerializable for Boolean {
     }
 }
 
+impl JavaFieldsDeserializable for Boolean {
+    type Fields = bool;
+
+    fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+    where
+        R: Read,
+    {
+        let b = r.read()?;
+        Ok(b)
+    }
+}
+
+impl JavaDeserializable for Boolean {
+    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: Read,
+    {
+        let b = Self::read_fields(r)?;
+        Ok(Self(b))
+    }
+}
+
 impl<'a> Layout<'a> for Boolean {
     type Input = bool;
     type Output = Boolean;
@@ -56,12 +82,20 @@ impl<'a> Layout<'a> for Boolean {
     }
 }
 
+impl DeserializeWith for Boolean {
+    type Output = bool;
+
+    fn deserialize_with(&self) -> Self::Output {
+        self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testkit;
     use serde::Serialize;
-    use serde_java::{JavaSerialize, JavaWriteableExt};
+    use serde_java::{JavaReadableExt, JavaSerialize, JavaWriteableExt};
 
     fn init() {
         pretty_env_logger::try_init_timed().ok();
@@ -71,26 +105,21 @@ mod tests {
     fn test_java_lang_boolean() -> anyhow::Result<()> {
         init();
 
-        // true
-        {
-            let b = Boolean::from(true);
-
+        for next in [true, false] {
+            let b = Boolean::from(next);
             info!("{}: {}", Boolean::class().name(), b);
 
-            let expect = testkit::serialize("java.lang.Boolean", &[], "true")?;
+            let expect = testkit::serialize(
+                Boolean::class().name(),
+                &[],
+                if next { "true" } else { "false" },
+            )?;
 
             let actual = b.to_bytes()?;
             assert_eq!(expect, actual);
-        }
 
-        // false
-        {
-            let b = Boolean::from(false);
-            info!("{}: {}", Boolean::class().name(), b);
-
-            let expect = testkit::serialize("java.lang.Boolean", &[], "false")?;
-            let actual = b.to_bytes()?;
-            assert_eq!(expect, actual);
+            let b2 = Boolean::from_bytes(&actual)?;
+            assert_eq!(b, b2);
         }
 
         Ok(())

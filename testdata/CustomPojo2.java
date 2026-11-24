@@ -16,6 +16,10 @@ public class CustomPojo2 implements Serializable {
 
   private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
 	in.defaultReadObject();
+
+    this.admin = in.readBoolean();
+    this.password = ((String) in.readObject()).substring("ENCRYPT_".length());
+    this.enabled = in.readBoolean();
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
