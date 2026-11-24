@@ -11,6 +11,8 @@ pub struct ObjectReader<R> {
     stab: HashMap<u32, AtomString>,
     ctab: HashMap<u32, Class>,
     next_handle: u32,
+    blkmode: bool,
+    block_remaining: usize,
 }
 
 impl<R> ObjectReader<R>
@@ -33,6 +35,8 @@ where
             stab: Default::default(),
             ctab: Default::default(),
             next_handle: BASE_WIRE_HANDLE,
+            blkmode: false,
+            block_remaining: 0,
         };
 
         r.validate()?;
@@ -56,6 +60,7 @@ where
         Ok(())
     }
 
+    /// Peeks at the next raw wire byte, including any block header.
     #[inline]
     pub fn peek(&mut self) -> io::Result<u8> {
         let buf = {
@@ -85,54 +90,146 @@ where
         Ok(())
     }
 
+    /// Switches primitive reads between block payloads and raw stream bytes.
+    /// Returns the previous mode. A partially consumed block must be read first.
+    pub fn set_block_data_mode(&mut self, enabled: bool) -> io::Result<bool> {
+        if !enabled && self.block_remaining != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unread block data",
+            ));
+        }
+        Ok(std::mem::replace(&mut self.blkmode, enabled))
+    }
+
+    pub(crate) fn with_block_data_mode<T>(
+        &mut self,
+        enabled: bool,
+        f: impl FnOnce(&mut Self) -> io::Result<T>,
+    ) -> io::Result<T> {
+        let previous = self.set_block_data_mode(enabled)?;
+        let result = f(self);
+        let restored = self.set_block_data_mode(previous);
+        let value = result?;
+        restored?;
+        Ok(value)
+    }
+
+    fn next_block(&mut self) -> io::Result<bool> {
+        while self.block_remaining == 0 {
+            let tag = match self.peek() {
+                Ok(tag) => tag,
+                Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => return Ok(false),
+                Err(err) => return Err(err),
+            };
+            self.block_remaining = match tag {
+                TC_BLOCKDATA => {
+                    self.advance(1)?;
+                    self.r.read_u8()? as usize
+                }
+                TC_BLOCKDATALONG => {
+                    self.advance(1)?;
+                    usize::try_from(self.r.read_i32::<BigEndian>()?)
+                        .map_err(|_| io::ErrorKind::InvalidData)?
+                }
+                _ => return Ok(false),
+            };
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn end_custom_data(&mut self) -> io::Result<()> {
+        while self.next_block()? {
+            let available = self.r.fill_buf()?.len();
+            if available == 0 {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+            let n = available.min(self.block_remaining);
+            self.r.consume(n);
+            self.block_remaining -= n;
+        }
+        if self.peek()? != TC_ENDBLOCKDATA {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        self.advance(1)
+    }
+
+    #[inline]
+    fn get_bytes<const N: usize>(&mut self) -> io::Result<[u8; N]> {
+        let mut bytes = [0; N];
+        if !self.blkmode {
+            self.r.read_exact(&mut bytes)?;
+            return Ok(bytes);
+        }
+
+        let mut remaining = bytes.as_mut_slice();
+        while !remaining.is_empty() {
+            if !self.next_block()? {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+            let n = remaining.len().min(self.block_remaining);
+            let read = self.r.read(&mut remaining[..n]);
+            match read {
+                Ok(0) => return Err(io::ErrorKind::UnexpectedEof.into()),
+                Ok(n) => {
+                    self.block_remaining -= n;
+                    remaining = &mut remaining[n..];
+                }
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) => return Err(err),
+            }
+        }
+        Ok(bytes)
+    }
+
     #[inline]
     pub(crate) fn get_i8(&mut self) -> io::Result<i8> {
-        self.r.read_i8()
+        Ok(i8::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_i16(&mut self) -> io::Result<i16> {
-        self.r.read_i16::<BigEndian>()
+        Ok(i16::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_i32(&mut self) -> io::Result<i32> {
-        self.r.read_i32::<BigEndian>()
+        Ok(i32::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_i64(&mut self) -> io::Result<i64> {
-        self.r.read_i64::<BigEndian>()
+        Ok(i64::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_u8(&mut self) -> io::Result<u8> {
-        self.r.read_u8()
+        Ok(u8::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_u16(&mut self) -> io::Result<u16> {
-        self.r.read_u16::<BigEndian>()
+        Ok(u16::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_u32(&mut self) -> io::Result<u32> {
-        self.r.read_u32::<BigEndian>()
+        Ok(u32::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_u64(&mut self) -> io::Result<u64> {
-        self.r.read_u64::<BigEndian>()
+        Ok(u64::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_f32(&mut self) -> io::Result<f32> {
-        self.r.read_f32::<BigEndian>()
+        Ok(f32::from_be_bytes(self.get_bytes()?))
     }
 
     #[inline]
     pub(crate) fn get_f64(&mut self) -> io::Result<f64> {
-        self.r.read_f64::<BigEndian>()
+        Ok(f64::from_be_bytes(self.get_bytes()?))
     }
 
     fn get_string16(&mut self) -> io::Result<AtomString> {
@@ -145,6 +242,10 @@ where
     }
 
     pub(crate) fn get_string(&mut self) -> io::Result<AtomString> {
+        self.with_block_data_mode(false, Self::read_string)
+    }
+
+    fn read_string(&mut self) -> io::Result<AtomString> {
         match self.peek()? {
             TC_REFERENCE => {
                 self.advance(1)?;
@@ -181,12 +282,14 @@ where
 
     /// Consumes a null marker, leaving non-null values untouched.
     pub fn read_null(&mut self) -> io::Result<bool> {
-        if self.peek()? == TC_NULL {
-            self.advance(1)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        self.with_block_data_mode(false, |r| {
+            if r.peek()? == TC_NULL {
+                r.advance(1)?;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        })
     }
 
     pub(crate) fn begin_object(&mut self) -> io::Result<Class> {
@@ -427,6 +530,63 @@ mod tests {
             self.name.write_to(w)?;
             Ok(())
         }
+    }
+
+    #[test]
+    fn test_default_read_object_between_block_data() -> Result<()> {
+        use crate::{ClassFlags, JavaReadable};
+
+        #[derive(Debug, PartialEq)]
+        struct BlockFixture(i32, i32, String, u8);
+
+        impl JavaObject for BlockFixture {
+            fn class() -> Class {
+                Class::builder("BlockFixture", 1)
+                    .flags(ClassFlags::SERIALIZABLE | ClassFlags::WRITE_METHOD)
+                    .field(Field::builder("value").int())
+                    .build()
+            }
+        }
+
+        impl JavaFieldsDeserializable for BlockFixture {
+            type Fields = i32;
+
+            fn read_fields<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<i32> {
+                r.read()
+            }
+        }
+
+        impl JavaDeserializable for BlockFixture {
+            fn read_object<R: io::Read>(r: &mut ObjectReader<R>) -> io::Result<Self> {
+                let leading = r.read()?;
+                let value = Self::default_read_object(r)?;
+                let label = r.read()?;
+                let trailing = r.read()?;
+                assert_eq!(
+                    r.set_block_data_mode(false).unwrap_err().kind(),
+                    io::ErrorKind::InvalidData
+                );
+                Ok(Self(leading, value, label, trailing))
+            }
+        }
+
+        // OpenJDK ObjectOutputStream: two shorts separated by flush(), defaultWriteObject(),
+        // writeObject("custom"), and write(byte[256]) with the first byte set to 42.
+        let mut bytes = hex::decode(concat!(
+            "aced00057372000c426c6f636b46697874757265000000000000000103000149000576616c75657870",
+            "770212347702567877000001740006637573746f6d7a000001002a",
+        ))?;
+        bytes.extend([0; 255]);
+        bytes.extend(hex::decode("787400056166746572")?);
+
+        let mut r = ObjectReader::with_capacity(bytes.as_slice(), 1)?;
+        assert_eq!(
+            BlockFixture::read_from(&mut r)?,
+            BlockFixture(0x12345678, 0x77000001, "custom".into(), 42)
+        );
+        assert_eq!(Reader::<String>::read(&mut r)?, "after");
+
+        Ok(())
     }
 
     #[test]

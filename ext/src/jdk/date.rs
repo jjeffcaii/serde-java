@@ -74,26 +74,28 @@ impl JavaSerializable for Date {
     }
 }
 
-// impl JavaFieldsDeserializable for Date {
-//     type Fields = u64;
-//
-//     fn read_fields<R>(r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
-//     where
-//         R: io::Read,
-//     {
-//         Ok(r.read()?)
-//     }
-// }
-//
-// impl JavaDeserializable for Date {
-//     fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
-//     where
-//         R: io::Read,
-//     {
-//         let unix_millis = Self::read_fields(r)?;
-//         Ok(Self(unix_millis))
-//     }
-// }
+impl JavaFieldsDeserializable for Date {
+    type Fields = ();
+
+    fn read_fields<R>(_r: &mut ObjectReader<R>) -> io::Result<Self::Fields>
+    where
+        R: io::Read,
+    {
+        Ok(())
+    }
+}
+
+impl JavaDeserializable for Date {
+    fn read_object<R>(r: &mut ObjectReader<R>) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        let _fields = Self::default_read_object(r)?;
+
+        let unix_millis: u64 = r.read()?;
+        Ok(Self(unix_millis))
+    }
+}
 
 impl<'a> Layout<'a> for Date {
     type Input = u64;
@@ -138,6 +140,9 @@ mod tests {
         let expect = testkit::serialize(Date::class().name(), &[], &unix_millis.to_string())?;
 
         assert_eq!(expect, actual);
+
+        let parsed = Date::from_bytes(&actual)?;
+        assert_eq!(origin, parsed);
 
         Ok(())
     }
